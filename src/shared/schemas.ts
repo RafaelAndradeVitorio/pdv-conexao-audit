@@ -21,6 +21,30 @@ export const PesquisadorSchema = z.object({
   telefone: z.string().min(8, 'Telefone inválido')
 });
 
+/** Cadastro/edição de pesquisador pelo coordenador */
+export const PesquisadorInputSchema = z
+  .object({
+    nome: z.string().trim().min(2, 'Informe o nome do pesquisador'),
+    telefone: z
+      .string()
+      .trim()
+      .refine((t) => t.replace(/\D/g, '').length >= 10, 'Telefone com DDD (mínimo 10 dígitos)'),
+    ativo: z.boolean().optional().default(true),
+    todasLojas: z.boolean().default(true),
+    lojaIds: z.array(z.string().min(1)).optional().default([])
+  })
+  .superRefine((d, ctx) => {
+    if (!d.todasLojas && d.lojaIds.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Selecione ao menos uma loja ou marque "Todas as lojas"',
+        path: ['lojaIds']
+      });
+    }
+  });
+
+export type PesquisadorInput = z.infer<typeof PesquisadorInputSchema>;
+
 export const LojaSchema = z.object({
   id: z.string().min(1, 'ID é obrigatório'),
   rede: z.enum(REDES_PDV),

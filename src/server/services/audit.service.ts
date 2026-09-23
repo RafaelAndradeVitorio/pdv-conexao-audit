@@ -4,6 +4,7 @@ import { AuditoriaSubmissionInput } from '../../shared/schemas';
 import { STATUS_LOJA, STATUS_ENTRADA } from '../../shared/constants';
 import { ResumoDashboard } from '../../shared/types';
 import { googleDriveService } from './googleDrive.service';
+import { pesquisadoresService } from './pesquisadores.service';
 import { consolidarResultados, LojaAuditada, ResultadosLevantamento } from '../../shared/analytics';
 
 // Valores gravados antes do formulário seguir os nomes do guia
@@ -45,7 +46,39 @@ export class AuditService {
    * Salva a auditoria com trava atômica anti-duplicidade em transação
    */
   async submitAudit(data: AuditoriaSubmissionInput) {
-    const resultado = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const resultado = await this.gravarAuditoria(data).catch(async (err) => {
+      // Dois envios simultâneos da mesma loja passam juntos pela checagem de status;
+      // o índice único de auditorias.loja_id barra o segundo, que vira o mesmo 409 da trava
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw await this.erroDuplicidade(data.lojaId);
+      }
+      throw err;
+    });
+
+    // Despacha as fotos para a fila assíncrona do Google Drive (não bloqueia resposta)
+    googleDriveService.enqueueAuditPhotos(resultado.id).catch((err) => {
+      console.error('[GoogleDrive] Erro ao disparar sincronização após auditoria:', err);
+    });
+
+    return resultado;
+  }
+
+  private async erroDuplicidade(lojaId: string): Promise<DuplicateAuditError> {
+    const loja = await prisma.loja.findUnique({
+      where: { id: lojaId },
+      include: { auditoria: { include: { pesquisador: true } } }
+    });
+    const quando = loja?.auditadaEm || loja?.auditoria?.createdAt || new Date();
+    return new DuplicateAuditError(
+      loja?.nome || lojaId,
+      loja?.auditoria?.pesquisador?.nome || 'Outro pesquisador',
+      quando.toLocaleString('pt-BR'),
+      loja?.auditoria?.pesquisadorId ?? loja?.pesquisadorId ?? null
+    );
+  }
+
+  private async gravarAuditoria(data: AuditoriaSubmissionInput) {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // 1. Busca a loja e verifica se já foi auditada
       const loja = await tx.loja.findUnique({
         where: { id: data.lojaId },
@@ -70,7 +103,10 @@ export class AuditService {
         throw new DuplicateAuditError(loja.nome, pesqNome, dataFormatada, loja.auditoria?.pesquisadorId ?? loja.pesquisadorId);
       }
 
-      // 2. Determina o status final da loja
+      // 2. Pesquisador ativo e com a loja liberada
+      await pesquisadoresService.verificarPermissao(tx, data.pesquisadorId, data.lojaId);
+
+      // 3. Determina o status final da loja
       const isOperante = data.statusEntrada === STATUS_ENTRADA.ABERTA;
       const novoStatusLoja = isOperante
         ? STATUS_LOJA.CONCLUIDA
@@ -141,13 +177,6 @@ export class AuditService {
 
       return auditoria;
     });
-
-    // Despacha as fotos para a fila assíncrona do Google Drive (não bloqueia resposta)
-    googleDriveService.enqueueAuditPhotos(resultado.id).catch((err) => {
-      console.error('[GoogleDrive] Erro ao disparar sincronização após auditoria:', err);
-    });
-
-    return resultado;
   }
 
   /**

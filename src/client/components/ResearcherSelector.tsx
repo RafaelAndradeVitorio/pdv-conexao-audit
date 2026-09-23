@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useAppStore } from '../stores/researcherStore';
 import { usePesquisadores } from '../hooks/useAuditData';
 import { UserCheck, ShieldCheck } from 'lucide-react';
@@ -10,6 +10,13 @@ interface Props {
 export const ResearcherSelector: React.FC<Props> = ({ onSelected }) => {
   const { pesquisadorId, setPesquisador } = useAppStore();
   const { data: pesquisadores, isLoading, error } = usePesquisadores();
+
+  // Desativado ou excluído pelo coordenador: deixa de aparecer e precisa escolher de novo
+  useEffect(() => {
+    if (pesquisadorId && pesquisadores && !pesquisadores.some((p) => p.id === pesquisadorId)) {
+      setPesquisador('', '');
+    }
+  }, [pesquisadorId, pesquisadores, setPesquisador]);
 
   const handleSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const id = e.target.value;

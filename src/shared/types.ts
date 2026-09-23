@@ -5,7 +5,19 @@ export interface Pesquisador {
   id: string;
   nome: string;
   telefone: string;
+  ativo?: boolean;
+  /** true = pode auditar qualquer loja; false = só as de lojaIds */
+  todasLojas?: boolean;
+  lojaIds?: string[];
   createdAt?: string;
+}
+
+/** Visão do coordenador (inclui inativos e contagem de auditorias) */
+export interface PesquisadorAdmin extends Pesquisador {
+  ativo: boolean;
+  todasLojas: boolean;
+  lojaIds: string[];
+  totalAuditorias: number;
 }
 
 export interface Loja {

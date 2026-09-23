@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { useLojas } from '../hooks/useAuditData';
+import { useLojas, usePesquisadores } from '../hooks/useAuditData';
+import { useAppStore } from '../stores/researcherStore';
 import { Loja } from '../../shared/types';
 import { Search, MapPin, AlertTriangle, CheckCircle2, XCircle, Store, X } from 'lucide-react';
 
@@ -11,7 +12,18 @@ interface Props {
 export const StoreSelector: React.FC<Props> = ({ selectedLoja, onSelectLoja }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isOpen, setIsOpen] = useState(false);
-  const { data: lojas, isLoading } = useLojas();
+  const { data: todasLojas, isLoading } = useLojas();
+  const { data: pesquisadores } = usePesquisadores();
+  const { pesquisadorId } = useAppStore();
+
+  // Só as lojas liberadas pelo coordenador para o pesquisador identificado
+  const pesquisador = pesquisadores?.find((p) => p.id === pesquisadorId);
+  const restrito = !!pesquisador && pesquisador.todasLojas === false;
+  const lojas = useMemo(() => {
+    if (!todasLojas || !restrito) return todasLojas;
+    const permitidas = new Set(pesquisador!.lojaIds || []);
+    return todasLojas.filter((l) => permitidas.has(l.id));
+  }, [todasLojas, restrito, pesquisador]);
 
   const filteredLojas = useMemo(() => {
     if (!lojas) return [];
@@ -51,7 +63,11 @@ export const StoreSelector: React.FC<Props> = ({ selectedLoja, onSelectLoja }) =
           <div className="h-7 w-7 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
             <Store className="w-4 h-4" />
           </div>
-          <span className="leading-tight">Seleção do PDV (57 Lojas RMSP)</span>
+          <span className="leading-tight">
+            {restrito
+              ? `Seleção do PDV (${lojas?.length ?? 0} ${lojas?.length === 1 ? 'loja liberada' : 'lojas liberadas'} para você)`
+              : 'Seleção do PDV (57 Lojas RMSP)'}
+          </span>
         </label>
         {selectedLoja && (
           <button
@@ -99,7 +115,11 @@ export const StoreSelector: React.FC<Props> = ({ selectedLoja, onSelectLoja }) =
               {isLoading ? (
                 <div className="p-4 text-center text-xs text-slate-500">Carregando lista de lojas...</div>
               ) : filteredLojas.length === 0 ? (
-                <div className="p-4 text-center text-xs text-slate-500">Nenhum PDV encontrado para "{searchTerm}".</div>
+                <div className="p-4 text-center text-xs text-slate-500">
+                  {restrito && lojas?.length === 0
+                    ? 'Nenhuma loja liberada para você. Fale com o coordenador.'
+                    : `Nenhum PDV encontrado para "${searchTerm}".`}
+                </div>
               ) : (
                 filteredLojas.map((loja) => {
                   const bloqueada = isLojaBloqueada(loja);

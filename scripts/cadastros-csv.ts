@@ -26,7 +26,7 @@ export interface Leitura<T> {
 }
 
 const semAcento = (s: string) =>
-  s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 
 function dividirLinha(linha: string, sep: string): string[] {
   const campos: string[] = [];
@@ -54,7 +54,7 @@ function dividirLinha(linha: string, sep: string): string[] {
 
 /** Converte o CSV em objetos com as chaves do cabeçalho normalizadas (sem acento, minúsculas, _ no lugar de espaço) */
 export function lerCsv(conteudo: string): { cabecalho: string[]; linhas: { linha: number; campos: Record<string, string> }[] } {
-  const texto = conteudo.replace(/^﻿/, '');
+  const texto = conteudo.replace(/^\uFEFF/, '');
   const todas = texto.split(/\r?\n/);
   const primeira = todas.findIndex((l) => l.trim() !== '');
   if (primeira < 0) return { cabecalho: [], linhas: [] };
@@ -124,7 +124,7 @@ export function lerPesquisadores(conteudo: string): Leitura<PesquisadorCsv> {
     const nome = primeiro(campos, ['nome', 'promotor', 'pesquisador']);
     const telefone = primeiro(campos, ['telefone', 'celular', 'whatsapp']);
     if (nome.length < 2) erros.push(`Linha ${linha}: nome vazio`);
-    else if (telefone.replace(/\D/g, '').length < 8) erros.push(`Linha ${linha}: telefone inválido para ${nome}`);
+    else if (telefone.replace(/\D/g, '').length < 10) erros.push(`Linha ${linha}: telefone inválido para ${nome}`);
     else registros.push({ linha, nome, telefone });
   }
   return { registros, erros };

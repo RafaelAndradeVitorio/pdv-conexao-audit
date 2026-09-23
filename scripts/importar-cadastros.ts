@@ -28,7 +28,7 @@ function argumento(nome: string): string | null {
 
 const aplicar = process.argv.includes('--aplicar');
 const removerAusentes = process.argv.includes('--remover-ausentes');
-const normalizar = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+const normalizar = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 
 function lerArquivo(caminho: string): string {
   if (!fs.existsSync(caminho)) throw new Error(`Arquivo não encontrado: ${caminho}`);

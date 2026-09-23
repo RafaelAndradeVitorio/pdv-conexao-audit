@@ -142,7 +142,7 @@ export class ExportService {
       rows.push(row.map(escapeCsv).join(';'));
     }
 
-    return '﻿' + rows.join('\r\n');
+    return '\uFEFF' + rows.join('\r\n');
   }
 
   /**

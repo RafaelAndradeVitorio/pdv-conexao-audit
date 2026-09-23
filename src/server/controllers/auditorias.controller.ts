@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { ZodError } from 'zod';
 import { AuditoriaSubmissionSchema } from '../../shared/schemas';
 import { auditService, DuplicateAuditError } from '../services/audit.service';
+import { ErroPesquisador } from '../services/pesquisadores.service';
 import { storageService } from '../storage/storage.service';
 import { prisma } from '../db';
 
@@ -22,6 +23,10 @@ export async function submeterAuditoria(req: Request, res: Response) {
           mensagem: i.message
         }))
       });
+    }
+
+    if (error instanceof ErroPesquisador) {
+      return res.status(error.statusCode).json({ error: error.message });
     }
 
     if (error instanceof DuplicateAuditError) {

@@ -20,7 +20,7 @@ describe('Acesso do coordenador por PIN', () => {
   });
 
   it('bloqueia painel, exports e reset sem sessão', async () => {
-    for (const rota of ['/api/auditorias/dashboard', '/api/auditorias/resultados', '/api/export/csv', '/api/lojas/loja-01']) {
+    for (const rota of ['/api/auditorias/dashboard', '/api/auditorias/resultados', '/api/export/csv', '/api/lojas/loja-01', '/api/admin/pesquisadores']) {
       const res = await request(app).get(rota);
       expect(res.status, rota).toBe(401);
       expect(res.body.codigo).toBe('PIN_NECESSARIO');

@@ -1,5 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
-import { Pesquisador, Loja, ResumoDashboard } from '../../shared/types';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Pesquisador, PesquisadorAdmin, Loja, ResumoDashboard } from '../../shared/types';
+import type { PesquisadorInput } from '../../shared/schemas';
 import type { ResultadosLevantamento } from '../../shared/analytics';
 import { fetchCoord } from '../utils/coordApi';
 
@@ -69,5 +70,55 @@ export function useResultados(enabled = true) {
     },
     enabled,
     refetchInterval: 30000
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Cadastro de pesquisadores (coordenador)
+
+async function enviarPesquisador(url: string, method: string, corpo?: unknown) {
+  const res = await fetchCoord(url, {
+    method,
+    headers: corpo ? { 'Content-Type': 'application/json' } : undefined,
+    body: corpo ? JSON.stringify(corpo) : undefined
+  });
+  const dados = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(dados.error || 'Não foi possível salvar');
+  return dados;
+}
+
+export function usePesquisadoresAdmin() {
+  return useQuery<PesquisadorAdmin[]>({
+    queryKey: ['pesquisadoresAdmin'],
+    queryFn: async () => {
+      const res = await fetchCoord(`${API_BASE}/admin/pesquisadores`);
+      if (!res.ok) throw new Error('Falha ao carregar pesquisadores');
+      return res.json();
+    }
+  });
+}
+
+export function useSalvarPesquisador() {
+  const queryClient = useQueryClient();
+  return useMutation<PesquisadorAdmin, Error, { id?: string; dados: PesquisadorInput }>({
+    mutationFn: ({ id, dados }) =>
+      id
+        ? enviarPesquisador(`${API_BASE}/admin/pesquisadores/${id}`, 'PUT', dados)
+        : enviarPesquisador(`${API_BASE}/admin/pesquisadores`, 'POST', dados),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pesquisadoresAdmin'] });
+      queryClient.invalidateQueries({ queryKey: ['pesquisadores'] });
+    }
+  });
+}
+
+export function useExcluirPesquisador() {
+  const queryClient = useQueryClient();
+  return useMutation<{ resultado: 'excluido' | 'desativado'; totalAuditorias: number }, Error, string>({
+    mutationFn: (id) => enviarPesquisador(`${API_BASE}/admin/pesquisadores/${id}`, 'DELETE'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pesquisadoresAdmin'] });
+      queryClient.invalidateQueries({ queryKey: ['pesquisadores'] });
+    }
   });
 }

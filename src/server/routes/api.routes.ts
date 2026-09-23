@@ -1,6 +1,12 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { listarPesquisadores } from '../controllers/pesquisadores.controller';
+import {
+  listarPesquisadores,
+  listarPesquisadoresAdmin,
+  criarPesquisador,
+  atualizarPesquisador,
+  excluirPesquisador
+} from '../controllers/pesquisadores.controller';
 import { listarLojas, obterLojaPorId, resetarLoja } from '../controllers/lojas.controller';
 import {
   submeterAuditoria,
@@ -29,6 +35,12 @@ apiRouter.post('/coord/sair', sair);
 
 // Pesquisadores
 apiRouter.get('/pesquisadores', listarPesquisadores);
+
+// Cadastro de pesquisadores (coordenador)
+apiRouter.get('/admin/pesquisadores', exigirCoordenador, listarPesquisadoresAdmin);
+apiRouter.post('/admin/pesquisadores', exigirCoordenador, criarPesquisador);
+apiRouter.put('/admin/pesquisadores/:id', exigirCoordenador, atualizarPesquisador);
+apiRouter.delete('/admin/pesquisadores/:id', exigirCoordenador, excluirPesquisador);
 
 // Lojas (com busca, filtros e validação anti-duplicação)
 apiRouter.get('/lojas', listarLojas);

@@ -18,6 +18,7 @@ import {
 import { REDES_PDV, STATUS_LOJA } from '../../shared/constants';
 import { AuditDetailModal } from '../components/AuditDetailModal';
 import { ResultadosLevantamento } from './ResultadosLevantamento';
+import { GestaoPesquisadores } from './GestaoPesquisadores';
 import { fetchCoord } from '../utils/coordApi';
 
 export const CoordinatorDashboard: React.FC<{ onSair?: () => void }> = ({ onSair }) => {
@@ -25,7 +26,7 @@ export const CoordinatorDashboard: React.FC<{ onSair?: () => void }> = ({ onSair
   const [selectedRede, setSelectedRede] = useState<string>('TODAS');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedLojaId, setSelectedLojaId] = useState<string | null>(null);
-  const [aba, setAba] = useState<'acompanhamento' | 'resultados'>('acompanhamento');
+  const [aba, setAba] = useState<'acompanhamento' | 'resultados' | 'pesquisadores'>('acompanhamento');
 
   const { data: dashboard, refetch: refetchDash } = useDashboard();
   const { data: lojas, isLoading: isLoadingLojas, refetch: refetchLojas } = useLojas({
@@ -154,7 +155,8 @@ export const CoordinatorDashboard: React.FC<{ onSair?: () => void }> = ({ onSair
         {(
           [
             ['acompanhamento', 'Acompanhamento'],
-            ['resultados', 'Resultados']
+            ['resultados', 'Resultados'],
+            ['pesquisadores', 'Pesquisadores']
           ] as const
         ).map(([id, rotulo]) => (
           <button
@@ -176,6 +178,8 @@ export const CoordinatorDashboard: React.FC<{ onSair?: () => void }> = ({ onSair
 
       {aba === 'resultados' ? (
         <ResultadosLevantamento onSelectLoja={setSelectedLojaId} />
+      ) : aba === 'pesquisadores' ? (
+        <GestaoPesquisadores />
       ) : (
       <>
       {/* 1. Barra de Progresso e Cards de Indicadores */}
@@ -262,7 +266,7 @@ export const CoordinatorDashboard: React.FC<{ onSair?: () => void }> = ({ onSair
         <div className="bg-white dark:bg-[#131B2B] border border-slate-200/90 dark:border-slate-800 rounded-3xl p-5 shadow-sm">
           <div className="flex items-center gap-2 text-xs font-bold text-blue-900 dark:text-blue-300 uppercase tracking-wider mb-3">
             <Users className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-            <span>Equipe em Campo (10)</span>
+            <span>Equipe em Campo</span>
           </div>
 
           <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
