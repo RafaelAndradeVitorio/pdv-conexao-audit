@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: 'Roboto', system-ui, -apple-system, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    background-color: #F8FAFC;
+    color: #0F172A;
+  }
+}
+
+.dark body {
+  background-color: #0B0F19;
+  color: #F8FAFC;
+}
+
+/* Efeito de ondulação e toque nativo do Android */
+.touch-manipulation {
+  touch-action: manipulation;
+}
+
+/* Suporte a Safe Area para notch e barra de gestos do Android */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 1rem);
+}
+
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 1rem);
+}
+
+/* Scrollbar sutil e elegante */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 9999px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}

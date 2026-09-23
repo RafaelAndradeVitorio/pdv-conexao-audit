@@ -1,0 +1,12 @@
+node_modules/
+dist/
+dist-server/
+uploads/
+*.log
+.env
+.env.*
+!.env.example
+google-credentials.json
+.DS_Store
+test-results/
+playwright-report/
