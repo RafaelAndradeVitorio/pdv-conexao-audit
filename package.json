@@ -9,7 +9,7 @@
     "dev:client": "vite",
     "build": "npm run build:client && npm run build:server",
     "build:client": "vite build",
-    "build:server": "tsc -p tsconfig.server.json",
+    "build:server": "tsc -p tsconfig.server.json && node scripts/create-dist-package.js",
     "start": "node dist-server/server/server.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev --name init",
