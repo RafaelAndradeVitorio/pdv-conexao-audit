@@ -67,14 +67,14 @@ export const PhotoCaptureGrid: React.FC<Props> = ({
 
   return (
     <div className="space-y-3.5">
-      <div className="flex items-center justify-between">
-        <label className="text-[13px] font-bold text-blue-900 dark:text-blue-300 tracking-wide flex items-center gap-2 font-roboto">
-          <div className="h-7 w-7 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <label className="text-[13px] font-bold text-blue-900 dark:text-blue-300 tracking-wide flex items-center gap-2 font-roboto min-w-0">
+          <div className="h-7 w-7 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
             <Camera className="w-4 h-4" />
           </div>
-          {isInoperante ? 'Registro Fotográfico (Fachada Obrigatória)' : 'Fotos Obrigatórias da Auditoria (Mínimo 6)'}
+          <span className="leading-tight">{isInoperante ? 'Registro Fotográfico (Fachada Obrigatória)' : 'Fotos Obrigatórias da Auditoria (Mínimo 6)'}</span>
         </label>
-        <span className="text-[11px] text-blue-700 dark:text-blue-300 flex items-center gap-1 font-semibold bg-blue-50 dark:bg-blue-950/40 px-2.5 py-0.5 rounded-full border border-blue-200/60 dark:border-blue-800/40">
+        <span className="text-[11px] text-blue-700 dark:text-blue-300 flex items-center gap-1 font-semibold bg-blue-50 dark:bg-blue-950/40 px-2.5 py-0.5 rounded-full border border-blue-200/60 dark:border-blue-800/40 shrink-0">
           <Sparkles className="w-3 h-3 text-blue-600 dark:text-blue-400" /> Compressão WebP Ativa
         </span>
       </div>
@@ -96,9 +96,9 @@ export const PhotoCaptureGrid: React.FC<Props> = ({
               }`}
             >
               {/* Header do Card com Número e Título */}
-              <div className="flex items-start justify-between gap-2 mb-2.5">
-                <span className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                  <span className="h-5 w-5 rounded-full bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-[11px] font-mono flex items-center justify-center font-bold">
+              <div className="flex items-start justify-between gap-2 mb-2.5 min-w-0">
+                <span className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2 min-w-0 flex-1">
+                  <span className="h-5 w-5 rounded-full bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-[11px] font-mono flex items-center justify-center font-bold shrink-0">
                     {index + 1}
                   </span>
                   <span className="truncate">{tipoObj.label.replace(/^Foto \d+: /, '')}</span>
@@ -163,18 +163,18 @@ export const PhotoCaptureGrid: React.FC<Props> = ({
                       type="button"
                       onClick={() => fileInputRefs.current[tipoObj.id]?.click()}
                       disabled={isUploading}
-                      className="flex-1 h-9 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs rounded-full font-medium flex items-center justify-center gap-1.5 transition"
+                      className="flex-1 h-9 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs rounded-full font-medium flex items-center justify-center gap-1.5 transition touch-manipulation whitespace-nowrap"
                     >
-                      <RefreshCw className="w-3 h-3 text-blue-600 dark:text-blue-400" /> Refazer
+                      <RefreshCw className="w-3 h-3 text-blue-600 dark:text-blue-400 shrink-0" /> Refazer
                     </button>
                     {/* M3 Error Outlined Button */}
                     <button
                       type="button"
                       onClick={() => onPhotoReset(tipoObj.id)}
                       disabled={isUploading}
-                      className="h-9 px-3 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 border border-rose-200/80 dark:border-rose-800/40 text-xs rounded-full font-medium transition flex items-center gap-1"
+                      className="h-9 px-3 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 border border-rose-200/80 dark:border-rose-800/40 text-xs rounded-full font-medium transition flex items-center gap-1 touch-manipulation shrink-0 whitespace-nowrap"
                     >
-                      <Trash2 className="w-3 h-3" /> Remover
+                      <Trash2 className="w-3 h-3 shrink-0" /> Remover
                     </button>
                   </div>
                 )}

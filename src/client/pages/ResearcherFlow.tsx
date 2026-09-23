@@ -241,7 +241,7 @@ export const ResearcherFlow: React.FC = () => {
               Status de Entrada no PDV
             </label>
             
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {Object.entries(STATUS_ENTRADA).map(([key, label]) => {
                 const isSelected = statusEntrada === label;
                 return (
@@ -249,14 +249,14 @@ export const ResearcherFlow: React.FC = () => {
                     key={key}
                     type="button"
                     onClick={() => setStatusEntrada(label)}
-                    className={`p-3.5 text-xs font-semibold rounded-2xl border text-left transition-all touch-manipulation flex items-center justify-between ${
+                    className={`p-3.5 text-xs font-semibold rounded-2xl border text-left transition-all touch-manipulation flex items-center justify-between min-w-0 ${
                       isSelected
                         ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
                         : 'bg-slate-50 dark:bg-[#0B0F19] text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-blue-400'
                     }`}
                   >
-                    <span>{label}</span>
-                    {isSelected && <Check className="w-4 h-4 text-white shrink-0 ml-1" />}
+                    <span className="truncate">{label}</span>
+                    {isSelected && <Check className="w-4 h-4 text-white shrink-0 ml-1.5" />}
                   </button>
                 );
               })}
@@ -290,19 +290,19 @@ export const ResearcherFlow: React.FC = () => {
               {/* Geladeira de Bebidas */}
               <div className="bg-white dark:bg-[#131B2B] border border-slate-200/90 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-sm space-y-3.5">
                 <div className="flex items-center gap-2 text-[13px] font-bold text-blue-900 dark:text-blue-300 tracking-wide">
-                  <div className="h-7 w-7 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                  <div className="h-7 w-7 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
                     <Refrigerator className="w-4 h-4" />
                   </div>
-                  Geladeira de Bebidas
+                  <span>Geladeira de Bebidas</span>
                 </div>
 
-                <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800">
-                  <span className="text-xs text-slate-700 dark:text-slate-200 font-medium">Existe geladeira no local?</span>
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800 gap-2">
+                  <span className="text-xs text-slate-700 dark:text-slate-200 font-medium min-w-0">Existe geladeira no local?</span>
+                  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                     <button
                       type="button"
                       onClick={() => setExisteGeladeira(true)}
-                      className={`px-4 py-1.5 text-xs rounded-full font-semibold transition-all ${
+                      className={`px-3.5 sm:px-4 py-1.5 text-xs rounded-full font-semibold transition-all touch-manipulation whitespace-nowrap ${
                         existeGeladeira
                           ? 'bg-blue-600 text-white shadow-sm'
                           : 'bg-slate-50 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
@@ -313,7 +313,7 @@ export const ResearcherFlow: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setExisteGeladeira(false)}
-                      className={`px-4 py-1.5 text-xs rounded-full font-semibold transition-all ${
+                      className={`px-3.5 sm:px-4 py-1.5 text-xs rounded-full font-semibold transition-all touch-manipulation whitespace-nowrap ${
                         !existeGeladeira
                           ? 'bg-blue-600 text-white shadow-sm'
                           : 'bg-slate-50 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
@@ -377,13 +377,13 @@ export const ResearcherFlow: React.FC = () => {
                   Presença Monster & Coca-Cola
                 </div>
 
-                <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800">
-                  <span className="text-xs text-slate-700 dark:text-slate-200 font-medium">Monster presente na loja?</span>
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800 gap-2">
+                  <span className="text-xs text-slate-700 dark:text-slate-200 font-medium min-w-0">Monster presente na loja?</span>
+                  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                     <button
                       type="button"
                       onClick={() => setMonsterPresente(true)}
-                      className={`px-4 py-1.5 text-xs rounded-full font-semibold transition-all ${
+                      className={`px-3.5 sm:px-4 py-1.5 text-xs rounded-full font-semibold transition-all touch-manipulation whitespace-nowrap ${
                         monsterPresente
                           ? 'bg-blue-600 text-white shadow-sm'
                           : 'bg-slate-50 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
@@ -394,7 +394,7 @@ export const ResearcherFlow: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setMonsterPresente(false)}
-                      className={`px-4 py-1.5 text-xs rounded-full font-semibold transition-all ${
+                      className={`px-3.5 sm:px-4 py-1.5 text-xs rounded-full font-semibold transition-all touch-manipulation whitespace-nowrap ${
                         !monsterPresente
                           ? 'bg-blue-600 text-white shadow-sm'
                           : 'bg-slate-50 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
@@ -406,13 +406,13 @@ export const ResearcherFlow: React.FC = () => {
                 </div>
 
                 {monsterPresente && (
-                  <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800">
-                    <span className="text-xs text-slate-700 dark:text-slate-200 font-medium">Monster gelado na geladeira?</span>
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800 gap-2">
+                    <span className="text-xs text-slate-700 dark:text-slate-200 font-medium min-w-0">Monster gelado na geladeira?</span>
+                    <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                       <button
                         type="button"
                         onClick={() => setMonsterNaGeladeira(true)}
-                        className={`px-4 py-1.5 text-xs rounded-full font-semibold transition-all ${
+                        className={`px-3.5 sm:px-4 py-1.5 text-xs rounded-full font-semibold transition-all touch-manipulation whitespace-nowrap ${
                           monsterNaGeladeira
                             ? 'bg-blue-600 text-white shadow-sm'
                             : 'bg-slate-50 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
@@ -423,7 +423,7 @@ export const ResearcherFlow: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => setMonsterNaGeladeira(false)}
-                        className={`px-4 py-1.5 text-xs rounded-full font-semibold transition-all ${
+                        className={`px-3.5 sm:px-4 py-1.5 text-xs rounded-full font-semibold transition-all touch-manipulation whitespace-nowrap ${
                           !monsterNaGeladeira
                             ? 'bg-blue-600 text-white shadow-sm'
                             : 'bg-slate-50 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
@@ -448,14 +448,14 @@ export const ResearcherFlow: React.FC = () => {
                           key={marca}
                           type="button"
                           onClick={() => toggleMarcaCoca(marca)}
-                          className={`p-2.5 rounded-2xl text-xs font-medium border text-left flex items-center justify-between transition-all touch-manipulation ${
+                          className={`p-2.5 rounded-2xl text-xs font-medium border text-left flex items-center justify-between transition-all touch-manipulation min-w-0 ${
                             checked
                               ? 'bg-blue-50 dark:bg-blue-950/60 border-blue-400 dark:border-blue-600 text-blue-900 dark:text-blue-100 font-bold shadow-sm'
                               : 'bg-slate-50 dark:bg-[#0B0F19] border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-blue-300'
                           }`}
                         >
                           <span className="truncate">{marca}</span>
-                          <span className={`text-xs font-bold ml-1 ${checked ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`}>
+                          <span className={`text-xs font-bold ml-1 shrink-0 ${checked ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`}>
                             {checked ? '✓' : '+'}
                           </span>
                         </button>
@@ -468,19 +468,19 @@ export const ResearcherFlow: React.FC = () => {
               {/* Concorrência */}
               <div className="bg-white dark:bg-[#131B2B] border border-slate-200/90 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-sm space-y-3.5">
                 <div className="flex items-center gap-2 text-[13px] font-bold text-blue-900 dark:text-blue-300 tracking-wide">
-                  <div className="h-7 w-7 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                  <div className="h-7 w-7 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
                     <ShoppingBag className="w-4 h-4" />
                   </div>
-                  Concorrência na Geladeira FEMSA
+                  <span>Concorrência na Geladeira FEMSA</span>
                 </div>
 
-                <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800">
-                  <span className="text-xs text-slate-700 dark:text-slate-200 font-medium">Concorrentes misturados na geladeira?</span>
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800 gap-2">
+                  <span className="text-xs text-slate-700 dark:text-slate-200 font-medium min-w-0">Concorrentes misturados na geladeira?</span>
+                  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                     <button
                       type="button"
                       onClick={() => setConcorrentesMisturados(true)}
-                      className={`px-4 py-1.5 text-xs rounded-full font-semibold transition-all ${
+                      className={`px-3.5 sm:px-4 py-1.5 text-xs rounded-full font-semibold transition-all touch-manipulation whitespace-nowrap ${
                         concorrentesMisturados
                           ? 'bg-blue-600 text-white shadow-sm'
                           : 'bg-slate-50 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
@@ -491,7 +491,7 @@ export const ResearcherFlow: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setConcorrentesMisturados(false)}
-                      className={`px-4 py-1.5 text-xs rounded-full font-semibold transition-all ${
+                      className={`px-3.5 sm:px-4 py-1.5 text-xs rounded-full font-semibold transition-all touch-manipulation whitespace-nowrap ${
                         !concorrentesMisturados
                           ? 'bg-blue-600 text-white shadow-sm'
                           : 'bg-slate-50 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
@@ -521,19 +521,19 @@ export const ResearcherFlow: React.FC = () => {
               {/* Área do Caixa & Display "Coca-Cola Vai Até Você" */}
               <div className="bg-white dark:bg-[#131B2B] border border-slate-200/90 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-sm space-y-3.5">
                 <div className="flex items-center gap-2 text-[13px] font-bold text-blue-900 dark:text-blue-300 tracking-wide">
-                  <div className="h-7 w-7 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                  <div className="h-7 w-7 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
                     <DollarSign className="w-4 h-4" />
                   </div>
-                  Área do Caixa & Display "Coca-Cola Vai Até Você"
+                  <span>Área do Caixa & Display "Coca-Cola Vai Até Você"</span>
                 </div>
 
-                <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800">
-                  <span className="text-xs text-slate-700 dark:text-slate-200 font-medium">Espaço livre próximo ao caixa?</span>
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800 gap-2">
+                  <span className="text-xs text-slate-700 dark:text-slate-200 font-medium min-w-0">Espaço livre próximo ao caixa?</span>
+                  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                     <button
                       type="button"
                       onClick={() => setEspacoLivreCaixa(true)}
-                      className={`px-4 py-1.5 text-xs rounded-full font-semibold transition-all ${
+                      className={`px-3.5 sm:px-4 py-1.5 text-xs rounded-full font-semibold transition-all touch-manipulation whitespace-nowrap ${
                         espacoLivreCaixa
                           ? 'bg-blue-600 text-white shadow-sm'
                           : 'bg-slate-50 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
@@ -544,7 +544,7 @@ export const ResearcherFlow: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setEspacoLivreCaixa(false)}
-                      className={`px-4 py-1.5 text-xs rounded-full font-semibold transition-all ${
+                      className={`px-3.5 sm:px-4 py-1.5 text-xs rounded-full font-semibold transition-all touch-manipulation whitespace-nowrap ${
                         !espacoLivreCaixa
                           ? 'bg-blue-600 text-white shadow-sm'
                           : 'bg-slate-50 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
@@ -568,13 +568,13 @@ export const ResearcherFlow: React.FC = () => {
                   </div>
                 )}
 
-                <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800">
-                  <span className="text-xs text-slate-700 dark:text-slate-200 font-medium">Presença de outros displays de impulso?</span>
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800 gap-2">
+                  <span className="text-xs text-slate-700 dark:text-slate-200 font-medium min-w-0">Presença de outros displays de impulso?</span>
+                  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                     <button
                       type="button"
                       onClick={() => setOutrosDisplaysImpulso(true)}
-                      className={`px-4 py-1.5 text-xs rounded-full font-semibold transition-all ${
+                      className={`px-3.5 sm:px-4 py-1.5 text-xs rounded-full font-semibold transition-all touch-manipulation whitespace-nowrap ${
                         outrosDisplaysImpulso
                           ? 'bg-blue-600 text-white shadow-sm'
                           : 'bg-slate-50 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
@@ -585,7 +585,7 @@ export const ResearcherFlow: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setOutrosDisplaysImpulso(false)}
-                      className={`px-4 py-1.5 text-xs rounded-full font-semibold transition-all ${
+                      className={`px-3.5 sm:px-4 py-1.5 text-xs rounded-full font-semibold transition-all touch-manipulation whitespace-nowrap ${
                         !outrosDisplaysImpulso
                           ? 'bg-blue-600 text-white shadow-sm'
                           : 'bg-slate-50 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
@@ -650,17 +650,17 @@ export const ResearcherFlow: React.FC = () => {
             <button
               type="submit"
               disabled={submitMutation.isPending}
-              className="w-full h-14 px-6 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-semibold rounded-full shadow-m3-2 flex items-center justify-center gap-2.5 disabled:opacity-50 touch-manipulation transition-all"
+              className="w-full h-14 px-4 sm:px-6 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-semibold rounded-full shadow-m3-2 flex items-center justify-center gap-2.5 disabled:opacity-50 touch-manipulation transition-all"
             >
               {submitMutation.isPending ? (
                 <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Registrando Auditoria com Trava Anti-Duplicidade...</span>
+                  <Loader2 className="w-5 h-5 animate-spin shrink-0" />
+                  <span className="truncate">Registrando Auditoria...</span>
                 </>
               ) : (
                 <>
-                  <Send className="w-5 h-5" />
-                  <span>
+                  <Send className="w-5 h-5 shrink-0" />
+                  <span className="truncate">
                     Finalizar Auditoria ({selectedLoja.nome.replace(/ - Estação.*/, '')})
                   </span>
                 </>

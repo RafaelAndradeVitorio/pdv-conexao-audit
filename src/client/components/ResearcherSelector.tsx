@@ -27,15 +27,15 @@ export const ResearcherSelector: React.FC<Props> = ({ onSelected }) => {
   return (
     // Android M3 Card - Paleta Coesa e Agradável
     <div className="bg-white dark:bg-[#131B2B] border border-slate-200/90 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-sm mb-4 transition-colors">
-      <div className="flex items-center justify-between mb-2">
-        <label className="text-[13px] font-bold text-blue-900 dark:text-blue-300 tracking-wide flex items-center gap-2 font-roboto">
-          <div className="h-7 w-7 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
+      <div className="flex flex-wrap items-center justify-between gap-1.5 mb-2">
+        <label className="text-[13px] font-bold text-blue-900 dark:text-blue-300 tracking-wide flex items-center gap-2 font-roboto min-w-0">
+          <div className="h-7 w-7 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
             <UserCheck className="w-4 h-4" />
           </div>
-          Identificação do Pesquisador
+          <span className="leading-tight">Identificação do Pesquisador</span>
         </label>
         {pesquisadorId && (
-          <span className="text-[11px] text-emerald-700 dark:text-emerald-300 flex items-center gap-1 font-semibold bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-0.5 rounded-full border border-emerald-200/80 dark:border-emerald-800/40">
+          <span className="text-[11px] text-emerald-700 dark:text-emerald-300 flex items-center gap-1 font-semibold bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-0.5 rounded-full border border-emerald-200/80 dark:border-emerald-800/40 shrink-0">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> Salvo no aparelho
           </span>
         )}
@@ -59,7 +59,7 @@ export const ResearcherSelector: React.FC<Props> = ({ onSelected }) => {
           <select
             value={pesquisadorId}
             onChange={handleSelect}
-            className="w-full h-14 bg-slate-50/70 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 hover:border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 rounded-2xl px-4 text-sm text-slate-900 dark:text-slate-100 font-medium appearance-none cursor-pointer touch-manipulation transition-all shadow-sm"
+            className="w-full h-14 bg-slate-50/70 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 hover:border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 rounded-2xl pl-4 pr-10 text-xs sm:text-sm text-slate-900 dark:text-slate-100 font-medium appearance-none cursor-pointer touch-manipulation transition-all shadow-sm truncate"
           >
             <option value="">Selecione quem está em campo...</option>
             {pesquisadores?.map((p) => (

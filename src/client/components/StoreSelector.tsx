@@ -46,17 +46,17 @@ export const StoreSelector: React.FC<Props> = ({ selectedLoja, onSelectLoja }) =
   return (
     // Android M3 Card - Paleta Coesa e Agradável
     <div className="bg-white dark:bg-[#131B2B] border border-slate-200/90 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-sm mb-4 transition-colors">
-      <div className="flex items-center justify-between mb-3">
-        <label className="text-[13px] font-bold text-blue-900 dark:text-blue-300 tracking-wide flex items-center gap-2 font-roboto">
-          <div className="h-7 w-7 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <label className="text-[13px] font-bold text-blue-900 dark:text-blue-300 tracking-wide flex items-center gap-2 font-roboto min-w-0">
+          <div className="h-7 w-7 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
             <Store className="w-4 h-4" />
           </div>
-          Seleção do PDV (57 Lojas RMSP)
+          <span className="leading-tight">Seleção do PDV (57 Lojas RMSP)</span>
         </label>
         {selectedLoja && (
           <button
             onClick={() => onSelectLoja(null)}
-            className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium px-2.5 py-1 rounded-full hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors"
+            className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium px-2.5 py-1 rounded-full hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors shrink-0"
           >
             Trocar Loja
           </button>
@@ -104,19 +104,19 @@ export const StoreSelector: React.FC<Props> = ({ selectedLoja, onSelectLoja }) =
                       key={loja.id}
                       type="button"
                       onClick={() => handleSelect(loja)}
-                      className={`w-full text-left p-3.5 rounded-2xl flex items-start justify-between gap-3 hover:bg-slate-50 dark:hover:bg-[#1E293B] transition-colors ${
+                      className={`w-full text-left p-3 sm:p-3.5 rounded-2xl flex items-start justify-between gap-2.5 sm:gap-3 hover:bg-slate-50 dark:hover:bg-[#1E293B] transition-colors ${
                         bloqueada ? 'opacity-85 bg-slate-50/50 dark:bg-[#0B0F19]/40' : ''
                       }`}
                     >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{loja.nome}</span>
-                          <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
+                          <span className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-slate-100 break-words">{loja.nome}</span>
+                          <span className="text-[10px] sm:text-[11px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium shrink-0">
                             {loja.rede}
                           </span>
                         </div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mb-0.5">
-                          <MapPin className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                        <div className="text-xs text-slate-500 dark:text-slate-400 flex items-start gap-1.5 mb-0.5 min-w-0">
+                          <MapPin className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5" />
                           <span className="truncate">{loja.endereco}</span>
                         </div>
                         <div className="text-[11px] text-slate-400 dark:text-slate-500 font-mono">
@@ -126,12 +126,12 @@ export const StoreSelector: React.FC<Props> = ({ selectedLoja, onSelectLoja }) =
 
                       <div className="shrink-0 text-right">
                         {bloqueada ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 px-2.5 py-1 rounded-full border border-rose-200/80 dark:border-rose-800/40">
-                            <XCircle className="w-3.5 h-3.5" /> Já Auditada
+                          <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 px-2 sm:px-2.5 py-1 rounded-full border border-rose-200/80 dark:border-rose-800/40 whitespace-nowrap">
+                            <XCircle className="w-3.5 h-3.5 shrink-0" /> Já Auditada
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-full border border-emerald-200/80 dark:border-emerald-800/40">
-                            <CheckCircle2 className="w-3.5 h-3.5" /> Disponível
+                          <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 sm:px-2.5 py-1 rounded-full border border-emerald-200/80 dark:border-emerald-800/40 whitespace-nowrap">
+                            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> Disponível
                           </span>
                         )}
                       </div>
@@ -146,27 +146,27 @@ export const StoreSelector: React.FC<Props> = ({ selectedLoja, onSelectLoja }) =
         /* Cartão de Loja Selecionada com Validação Anti-Duplicidade */
         <div className="space-y-3">
           <div className="bg-slate-50/80 dark:bg-[#0B0F19] border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
               <span className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">{selectedLoja.rede}</span>
               <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">{selectedLoja.cnpjFormatado}</span>
             </div>
-            <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 mb-1.5">{selectedLoja.nome}</h2>
-            <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">
-              <MapPin className="w-4 h-4 text-blue-500 shrink-0" />
-              <span>{selectedLoja.endereco}</span>
+            <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 mb-1.5 break-words">{selectedLoja.nome}</h2>
+            <div className="flex items-start gap-1.5 text-xs text-slate-600 dark:text-slate-400 break-words">
+              <MapPin className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+              <span className="min-w-0">{selectedLoja.endereco}</span>
             </div>
           </div>
 
           {/* ALERTA CRÍTICO: TRAVA ANTI-DUPLICIDADE (Tons Suaves e Coesos) */}
           {isLojaBloqueada(selectedLoja) ? (
-            <div className="p-4 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/60 rounded-2xl text-rose-900 dark:text-rose-200 flex items-start gap-3 shadow-sm">
-              <AlertTriangle className="w-6 h-6 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
-              <div>
-                <h4 className="text-sm font-bold text-rose-900 dark:text-rose-100 mb-1">Atenção: PDV Já Auditado!</h4>
-                <p className="text-xs font-medium text-rose-800 dark:text-rose-200/90 leading-relaxed">
+            <div className="p-3.5 sm:p-4 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/60 rounded-2xl text-rose-900 dark:text-rose-200 flex items-start gap-2.5 sm:gap-3 shadow-sm">
+              <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+              <div className="min-w-0 flex-1">
+                <h4 className="text-sm font-bold text-rose-900 dark:text-rose-100 mb-1 break-words">Atenção: PDV Já Auditado!</h4>
+                <p className="text-xs font-medium text-rose-800 dark:text-rose-200/90 leading-relaxed break-words">
                   Esta loja já foi auditada por <strong className="font-bold underline">{selectedLoja.pesquisadorNome || 'Outro Pesquisador'}</strong> às <strong className="font-bold underline">{formatHora(selectedLoja.auditadaEm)}</strong>.
                 </p>
-                <p className="text-[11px] text-rose-700 dark:text-rose-300 mt-2">
+                <p className="text-[11px] text-rose-700 dark:text-rose-300 mt-2 break-words">
                   Por regras de compliance de campo, não é permitido reenviar dados para uma loja já concluída. Por favor, selecione outro PDV pendente.
                 </p>
               </div>
@@ -174,7 +174,7 @@ export const StoreSelector: React.FC<Props> = ({ selectedLoja, onSelectLoja }) =
           ) : (
             <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-2xl text-emerald-900 dark:text-emerald-200 text-xs flex items-center gap-2.5 font-medium">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-              <span>Loja liberada para auditoria de campo. Prossiga com o preenchimento abaixo.</span>
+              <span className="leading-tight">Loja liberada para auditoria de campo. Prossiga com o preenchimento abaixo.</span>
             </div>
           )}
         </div>

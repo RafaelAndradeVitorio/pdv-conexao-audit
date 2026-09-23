@@ -51,28 +51,28 @@ export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onCl
     <>
       {/* Backdrop Principal */}
       <div
-        className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-fade-in"
+        className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fade-in"
         onClick={onClose}
       >
         {/* Container do Modal */}
         <div
-          className="relative w-full max-w-4xl bg-white dark:bg-[#131B2B] border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden my-auto max-h-[90vh] flex flex-col font-roboto text-slate-800 dark:text-slate-100"
+          className="relative w-full max-w-4xl bg-white dark:bg-[#131B2B] border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden my-auto max-h-[92dvh] flex flex-col font-roboto text-slate-800 dark:text-slate-100"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header do Modal */}
-          <div className="flex items-center justify-between p-5 sm:p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-[#0B0F19]/60 sticky top-0 z-10">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-200/50 dark:border-blue-800/40">
+          <div className="flex items-start justify-between p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-[#0B0F19]/60 sticky top-0 z-10 gap-3">
+            <div className="flex items-start gap-2.5 sm:gap-3 min-w-0 flex-1">
+              <div className="w-10 h-10 rounded-2xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-200/50 dark:border-blue-800/40 mt-0.5">
                 <Store className="w-5 h-5" />
               </div>
-              <div>
-                <div className="flex flex-wrap items-center gap-2 mb-1">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400 shrink-0">
                     {loja?.rede || 'Auditoria de PDV'}
                   </span>
                   {loja && (
                     <span
-                      className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${
+                      className={`inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-semibold px-2 sm:px-2.5 py-0.5 rounded-full border shrink-0 ${
                         loja.status === STATUS_LOJA.CONCLUIDA
                           ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200/80 dark:border-emerald-800/40'
                           : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200/80 dark:border-amber-800/40'
@@ -90,10 +90,10 @@ export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onCl
                     </span>
                   )}
                 </div>
-                <h3 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-50 leading-tight">
+                <h3 className="text-base sm:text-xl font-bold text-slate-900 dark:text-slate-50 leading-tight break-words">
                   {loja?.nome || 'Carregando detalhes...'}
                 </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 break-words">
                   {loja?.estacaoMetro ? `Estação ${loja.estacaoMetro} • ` : ''}
                   CNPJ: <span className="font-mono">{loja?.cnpjFormatado}</span>
                 </p>
@@ -102,7 +102,7 @@ export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onCl
 
             <button
               onClick={onClose}
-              className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition shrink-0"
               title="Fechar (Esc)"
             >
               <X className="w-5 h-5" />
@@ -158,7 +158,7 @@ export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onCl
                   </div>
 
                   {auditoria?.justificativaInoperante && (
-                    <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/40 rounded-xl text-xs text-amber-800 dark:text-amber-200">
+                    <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/40 rounded-xl text-xs text-amber-800 dark:text-amber-200 break-words">
                       <span className="font-bold">Justificativa da Inoperação: </span>
                       {auditoria.justificativaInoperante}
                     </div>
@@ -172,7 +172,7 @@ export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onCl
                       <span>1. Geladeiras & Merchandising</span>
                     </h4>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5 text-xs">
                       <div className="bg-slate-50 dark:bg-[#0B0F19]/40 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
                         <div className="text-[11px] text-slate-500">Possui Geladeira?</div>
                         <div className="font-bold text-slate-900 dark:text-slate-100 mt-0.5">
@@ -224,7 +224,7 @@ export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onCl
                           </span>
                         </div>
                         {auditoria?.concorrentesDetalhes && (
-                          <div className="text-[11px] text-slate-600 dark:text-slate-400 italic">
+                          <div className="text-[11px] text-slate-600 dark:text-slate-400 italic break-words">
                             "{auditoria.concorrentesDetalhes}"
                           </div>
                         )}
@@ -260,7 +260,7 @@ export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onCl
                           {auditoria?.espacoLivreCaixa ? 'Sim' : 'Não'}
                         </div>
                         {auditoria?.espacoLadoTamanho && (
-                          <div className="text-[11px] text-slate-500 mt-1 font-mono">
+                          <div className="text-[11px] text-slate-500 mt-1 font-mono break-words">
                             {auditoria.espacoLadoTamanho}
                           </div>
                         )}
@@ -294,7 +294,7 @@ export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onCl
                     {auditoria?.descricaoOportunidade && (
                       <div className="bg-slate-50 dark:bg-[#0B0F19]/40 p-3.5 rounded-xl border border-slate-200/60 dark:border-slate-800 text-xs">
                         <div className="text-[11px] font-bold text-slate-500 uppercase">Observações da Oportunidade</div>
-                        <p className="text-slate-700 dark:text-slate-300 mt-1 italic leading-relaxed">
+                        <p className="text-slate-700 dark:text-slate-300 mt-1 italic leading-relaxed break-words">
                           "{auditoria.descricaoOportunidade}"
                         </p>
                       </div>
@@ -401,11 +401,11 @@ export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onCl
           {/* Footer do Modal */}
           <div className="p-4 sm:p-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-[#0B0F19]/60 flex items-center justify-between text-xs">
             <span className="text-slate-500 dark:text-slate-400">
-              Pressione <kbd className="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-700 rounded text-[10px] font-mono">ESC</kbd> para fechar
+              <span className="hidden sm:inline">Pressione </span><kbd className="hidden sm:inline-block px-1.5 py-0.5 bg-slate-200 dark:bg-slate-700 rounded text-[10px] font-mono">ESC</kbd><span className="hidden sm:inline"> para fechar</span>
             </span>
             <button
               onClick={onClose}
-              className="px-5 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold rounded-full transition"
+              className="px-5 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold rounded-full transition ml-auto"
             >
               Fechar
             </button>
@@ -416,18 +416,27 @@ export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onCl
       {/* Lightbox em Tela Cheia para Foto Ampliada */}
       {activePhoto && (
         <div
-          className="fixed inset-0 z-60 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-4 animate-fade-in"
+          className="fixed inset-0 z-60 bg-black/95 backdrop-blur-md flex flex-col items-center justify-center p-3 sm:p-4 animate-fade-in"
           onClick={() => setActivePhoto(null)}
         >
-          <div className="relative max-w-4xl max-h-[85vh] flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
+          {/* Botão de Fechar fixo no topo direito para fácil toque em mobile */}
+          <button
+            onClick={() => setActivePhoto(null)}
+            className="absolute top-3 right-3 sm:top-5 sm:right-5 z-70 p-2.5 bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white rounded-full transition border border-slate-700/60 shadow-lg"
+            title="Fechar (Esc)"
+          >
+            <X className="w-5 h-5" />
+          </button>
+
+          <div className="relative max-w-4xl w-full flex flex-col items-center my-auto" onClick={(e) => e.stopPropagation()}>
             <img
               src={activePhoto.url}
               alt={activePhoto.tipo}
-              className="max-h-[80vh] max-w-full rounded-2xl shadow-2xl object-contain border border-slate-700"
+              className="max-h-[60vh] sm:max-h-[75vh] max-w-full rounded-2xl shadow-2xl object-contain border border-slate-700"
             />
 
-            <div className="mt-4 flex items-center gap-4 text-white text-xs">
-              <span className="font-semibold">
+            <div className="mt-3 sm:mt-4 flex flex-wrap items-center justify-center gap-2 sm:gap-3 text-white text-xs max-w-full px-2">
+              <span className="font-semibold text-center w-full sm:w-auto px-2 py-0.5">
                 {TIPOS_FOTO.find((t) => t.id === activePhoto.tipo)?.label || activePhoto.tipo}
               </span>
 
@@ -436,26 +445,22 @@ export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onCl
                   href={activePhoto.driveUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-amber-600 hover:bg-amber-700 text-white font-medium transition shadow-md"
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-600 hover:bg-amber-700 text-white font-medium transition shadow-md whitespace-nowrap"
                 >
-                  <HardDrive className="w-3.5 h-3.5" /> Abrir no Google Drive <ExternalLink className="w-3 h-3" />
+                  <HardDrive className="w-3.5 h-3.5 shrink-0" />
+                  <span>Google Drive</span>
+                  <ExternalLink className="w-3 h-3 opacity-80 shrink-0" />
                 </a>
               )}
 
               <a
                 href={activePhoto.url}
                 download
-                className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-white font-medium transition"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-white font-medium transition border border-slate-700 whitespace-nowrap"
               >
-                <Download className="w-3.5 h-3.5" /> Baixar Imagem
+                <Download className="w-3.5 h-3.5 shrink-0" />
+                <span>Baixar Imagem</span>
               </a>
-
-              <button
-                onClick={() => setActivePhoto(null)}
-                className="p-1.5 text-slate-400 hover:text-white rounded-full hover:bg-slate-800 transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
             </div>
           </div>
         </div>
