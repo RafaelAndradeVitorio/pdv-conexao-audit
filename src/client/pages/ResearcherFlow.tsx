@@ -129,7 +129,8 @@ export const ResearcherFlow: React.FC = () => {
       .map((p) => ({
         tipo: p.tipo,
         url: p.url!,
-        tamanhoBytes: (p.compressedKb || 300) * 1024
+        tamanhoBytes: (p.compressedKb || 300) * 1024,
+        base64: p.previewUrl || undefined
       }));
 
     if (isInoperante) {

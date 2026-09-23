@@ -28,6 +28,7 @@ export interface AuditoriaFoto {
   tipo: string;
   url: string;
   tamanhoBytes?: number | null;
+  base64?: string | null;
   driveFileId?: string | null;
   driveUrl?: string | null;
   createdAt?: string;

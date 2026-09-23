@@ -78,6 +78,7 @@ model Foto {
   tipo         String
   url          String
   tamanhoBytes Int?      @map("tamanho_bytes")
+  base64       String?   @map("base64") @db.Text
   driveFileId  String?   @map("drive_file_id")
   driveUrl     String?   @map("drive_url")
   createdAt    DateTime  @default(now()) @map("created_at")

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useLoja } from '../hooks/useAuditData';
 import {
   X,
@@ -15,7 +16,8 @@ import {
   Download,
   HardDrive,
   Camera,
-  Image as ImageIcon
+  Image as ImageIcon,
+  RotateCcw
 } from 'lucide-react';
 import { STATUS_LOJA, TIPOS_FOTO } from '../../shared/constants';
 import { AuditoriaFoto } from '../../shared/types';
@@ -26,9 +28,34 @@ interface AuditDetailModalProps {
 }
 
 export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onClose }) => {
+  const queryClient = useQueryClient();
   const { data: loja, isLoading, error } = useLoja(lojaId);
   const [activePhoto, setActivePhoto] = useState<AuditoriaFoto | null>(null);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
+  const [isResetting, setIsResetting] = useState(false);
+
+  const handleResetAudit = async () => {
+    if (!lojaId) return;
+    const confirmReset = window.confirm(
+      `Deseja realmente resetar a auditoria de "${loja?.nome || 'PDV'}" para PENDENTE?\n\nIsso liberará a loja imediatamente no app para um novo teste com fotos.`
+    );
+    if (!confirmReset) return;
+
+    try {
+      setIsResetting(true);
+      const res = await fetch(`/api/lojas/${lojaId}/reset`, { method: 'POST' });
+      if (!res.ok) throw new Error('Falha ao resetar auditoria da loja');
+      await queryClient.invalidateQueries({ queryKey: ['lojas'] });
+      await queryClient.invalidateQueries({ queryKey: ['loja', lojaId] });
+      await queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      alert(`Loja "${loja?.nome}" resetada com sucesso para PENDENTE!`);
+      onClose();
+    } catch (err: any) {
+      alert(`Erro: ${err.message || 'Falha ao resetar'}`);
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   // Fecha o modal ao pressionar a tecla ESC
   useEffect(() => {
@@ -417,16 +444,31 @@ export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onCl
           </div>
 
           {/* Footer do Modal */}
-          <div className="p-4 sm:p-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-[#0B0F19]/60 flex items-center justify-between text-xs">
-            <span className="text-slate-500 dark:text-slate-400">
-              <span className="hidden sm:inline">Pressione </span><kbd className="hidden sm:inline-block px-1.5 py-0.5 bg-slate-200 dark:bg-slate-700 rounded text-[10px] font-mono">ESC</kbd><span className="hidden sm:inline"> para fechar</span>
-            </span>
-            <button
-              onClick={onClose}
-              className="px-5 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold rounded-full transition ml-auto"
-            >
-              Fechar
-            </button>
+          <div className="p-4 sm:p-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-[#0B0F19]/60 flex flex-wrap items-center justify-between text-xs gap-3">
+            {loja?.auditoria && (
+              <button
+                type="button"
+                onClick={handleResetAudit}
+                disabled={isResetting}
+                className="px-4 py-2 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 text-rose-700 dark:text-rose-300 font-semibold rounded-full border border-rose-200 dark:border-rose-800 transition flex items-center gap-1.5 touch-manipulation disabled:opacity-50"
+                title="Libera a loja para ser auditada novamente pelo pesquisador"
+              >
+                <RotateCcw className={`w-3.5 h-3.5 ${isResetting ? 'animate-spin' : ''}`} />
+                <span>{isResetting ? 'Resetando...' : 'Liberar PDV para Novo Teste'}</span>
+              </button>
+            )}
+
+            <div className="flex items-center gap-3 ml-auto">
+              <span className="text-slate-500 dark:text-slate-400">
+                <span className="hidden sm:inline">Pressione </span><kbd className="hidden sm:inline-block px-1.5 py-0.5 bg-slate-200 dark:bg-slate-700 rounded text-[10px] font-mono">ESC</kbd><span className="hidden sm:inline"> para fechar</span>
+              </span>
+              <button
+                onClick={onClose}
+                className="px-5 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold rounded-full transition"
+              >
+                Fechar
+              </button>
+            </div>
           </div>
         </div>
       </div>

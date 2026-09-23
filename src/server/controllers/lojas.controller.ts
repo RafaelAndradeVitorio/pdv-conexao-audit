@@ -114,3 +114,45 @@ export async function obterLojaPorId(req: Request, res: Response) {
     return res.status(500).json({ error: 'Erro ao buscar dados da loja' });
   }
 }
+
+export async function resetarLoja(req: Request, res: Response) {
+  try {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    if (!id) return res.status(400).json({ error: 'ID inválido' });
+
+    const loja = await prisma.loja.findUnique({
+      where: { id },
+      include: { auditoria: true }
+    });
+
+    if (!loja) {
+      return res.status(404).json({ error: 'Loja não encontrada' });
+    }
+
+    if (loja.auditoria) {
+      await prisma.foto.deleteMany({
+        where: { auditoriaId: loja.auditoria.id }
+      });
+      await prisma.auditoria.delete({
+        where: { id: loja.auditoria.id }
+      });
+    }
+
+    const lojaAtualizada = await prisma.loja.update({
+      where: { id },
+      data: {
+        status: 'PENDENTE',
+        auditadaEm: null,
+        pesquisadorId: null
+      }
+    });
+
+    return res.json({
+      message: `Loja ${lojaAtualizada.nome} resetada para PENDENTE com sucesso!`,
+      loja: lojaAtualizada
+    });
+  } catch (error: unknown) {
+    console.error('Erro ao resetar loja:', error);
+    return res.status(500).json({ error: 'Erro ao resetar auditoria da loja' });
+  }
+}

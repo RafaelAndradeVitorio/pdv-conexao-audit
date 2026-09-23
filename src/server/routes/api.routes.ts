@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { listarPesquisadores } from '../controllers/pesquisadores.controller';
-import { listarLojas, obterLojaPorId } from '../controllers/lojas.controller';
+import { listarLojas, obterLojaPorId, resetarLoja } from '../controllers/lojas.controller';
 import {
   submeterAuditoria,
   uploadFoto,
@@ -26,6 +26,7 @@ apiRouter.get('/pesquisadores', listarPesquisadores);
 // Lojas (com busca, filtros e validação anti-duplicação)
 apiRouter.get('/lojas', listarLojas);
 apiRouter.get('/lojas/:id', obterLojaPorId);
+apiRouter.post('/lojas/:id/reset', resetarLoja);
 
 // Auditorias
 apiRouter.post('/auditorias', submeterAuditoria);

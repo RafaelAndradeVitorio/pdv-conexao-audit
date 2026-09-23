@@ -161,6 +161,11 @@ export class ExportService {
         if (fs.existsSync(fullDiskPath)) {
           const zipEntryName = `${nomePastaLoja}/${path.basename(fullDiskPath)}`;
           archive.file(fullDiskPath, { name: zipEntryName });
+        } else if ((foto as any).base64) {
+          const base64Data = (foto as any).base64.replace(/^data:image\/\w+;base64,/, '');
+          const buffer = Buffer.from(base64Data, 'base64');
+          const zipEntryName = `${nomePastaLoja}/${path.basename(fullDiskPath)}`;
+          archive.append(buffer, { name: zipEntryName });
         } else {
           const zipEntryName = `${nomePastaLoja}/${foto.tipo}.txt`;
           archive.append(`Foto: ${foto.tipo}\nURL: ${foto.url}\nLoja: ${aud.loja.nome}`, {

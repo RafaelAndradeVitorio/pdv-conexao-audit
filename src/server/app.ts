@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { apiRouter } from './routes/api.routes';
 import { storageService } from './storage/storage.service';
+import { prisma } from './db';
 
 export const app = express();
 
@@ -14,14 +15,57 @@ app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
 // Servir arquivos estáticos de uploads com fallback inteligente para fotos mockadas/arquivadas
 app.use('/uploads', express.static(storageService.getBaseDir()));
-app.get('/uploads/*', (req: Request, res: Response) => {
+app.get('/uploads/*', async (req: Request, res: Response) => {
   const relPath = req.path.replace(/^\/uploads\/?/, '');
   const filePath = storageService.getFilePath(relPath);
+
+  // 1. Arquivo existe em disco
   if (fs.existsSync(filePath)) {
     return res.sendFile(filePath);
   }
 
-  // Fallback: Retorna um SVG de alta definição representando o registro fotográfico
+  // 2. Arquivo em cache de memória recente (após upload)
+  const cached = storageService.getMemoryCache(req.path) || storageService.getMemoryCache(relPath);
+  if (cached) {
+    res.setHeader('Content-Type', 'image/webp');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.send(cached);
+  }
+
+  // 3. Busca no banco PostgreSQL se a foto foi persistida com base64
+  try {
+    const foto = await prisma.foto.findFirst({
+      where: {
+        OR: [
+          { url: req.path },
+          { url: `/uploads/${relPath}` },
+          { url: { endsWith: path.basename(relPath) } }
+        ]
+      }
+    });
+
+    if (foto?.base64) {
+      const base64Data = foto.base64.replace(/^data:image\/\w+;base64,/, '');
+      const buffer = Buffer.from(base64Data, 'base64');
+
+      // Grava no disco efêmero para acelerar requisições futuras
+      try {
+        fs.mkdirSync(path.dirname(filePath), { recursive: true });
+        fs.writeFileSync(filePath, buffer);
+      } catch (e) {
+        // Ignora erro de filesystem
+      }
+
+      storageService.setMemoryCache(req.path, buffer);
+      res.setHeader('Content-Type', 'image/webp');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.send(buffer);
+    }
+  } catch (err) {
+    console.error('Erro ao buscar foto persistida no PostgreSQL:', err);
+  }
+
+  // 4. Fallback: Retorna um SVG de alta definição representando o registro fotográfico
   const fileName = path.basename(relPath);
   const cleanName = decodeURIComponent(fileName)
     .replace(/^foto_/, '')

@@ -220,7 +220,10 @@ export const CoordinatorDashboard: React.FC = () => {
         {/* Barra de Filtros */}
         <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-[#0B0F19]/40 flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="relative flex items-center flex-1 w-full md:max-w-md">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" />
+            <Search
+              className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
+              style={{ top: '50%', transform: 'translateY(-50%)' }}
+            />
             <input
               type="text"
               placeholder="Buscar por Loja, Estação, CNPJ ou Pesquisador..."

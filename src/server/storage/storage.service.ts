@@ -13,6 +13,7 @@ export interface UploadResult {
 
 export class StorageService {
   private baseDir: string;
+  private memoryCache = new Map<string, Buffer>();
 
   constructor() {
     this.baseDir = path.resolve(process.env.STORAGE_DIR || './uploads');
@@ -43,11 +44,22 @@ export class StorageService {
     const relativePath = `${cleanCnpj}/${fileName}`;
     const url = `/uploads/${relativePath}`;
 
+    this.memoryCache.set(url, buffer);
+    this.memoryCache.set(relativePath, buffer);
+
     return {
       url,
       storagePath: filePath,
       size: buffer.length
     };
+  }
+
+  setMemoryCache(key: string, buffer: Buffer): void {
+    this.memoryCache.set(key, buffer);
+  }
+
+  getMemoryCache(key: string): Buffer | undefined {
+    return this.memoryCache.get(key);
   }
 
   getFilePath(relativePath: string): string {

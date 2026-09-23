@@ -67,7 +67,10 @@ export const StoreSelector: React.FC<Props> = ({ selectedLoja, onSelectLoja }) =
       {!selectedLoja ? (
         <div className="relative">
           <div className="relative flex items-center">
-            <Search className="w-5 h-5 text-slate-400 dark:text-slate-500 absolute left-4 pointer-events-none" />
+            <Search
+              className="w-5 h-5 text-slate-400 dark:text-slate-500 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"
+              style={{ top: '50%', transform: 'translateY(-50%)' }}
+            />
             <input
               type="text"
               placeholder="Digite o CNPJ, Nome da Loja ou Estação de Metrô..."
@@ -83,7 +86,8 @@ export const StoreSelector: React.FC<Props> = ({ selectedLoja, onSelectLoja }) =
               <button
                 type="button"
                 onClick={() => setSearchTerm('')}
-                className="absolute right-3.5 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full"
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full"
+                style={{ top: '50%', transform: 'translateY(-50%)' }}
               >
                 <X className="w-4 h-4" />
               </button>

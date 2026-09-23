@@ -45,7 +45,8 @@ export const UploadFotoSchema = z.object({
 export const AuditoriaFotoInputSchema = z.object({
   tipo: z.string().min(1, 'Tipo de foto é obrigatório'),
   url: z.string().min(1, 'URL da foto é obrigatória'),
-  tamanhoBytes: z.number().nonnegative().optional()
+  tamanhoBytes: z.number().nonnegative().optional(),
+  base64: z.string().optional()
 });
 
 export type AuditoriaFotoInput = z.infer<typeof AuditoriaFotoInputSchema>;

@@ -86,10 +86,11 @@ export class AuditService {
 
           createdAt: agora,
           fotos: {
-            create: data.fotos.map((f: { tipo: string; url: string; tamanhoBytes?: number }) => ({
+            create: data.fotos.map((f: { tipo: string; url: string; tamanhoBytes?: number; base64?: string }) => ({
               tipo: f.tipo,
               url: f.url,
-              tamanhoBytes: f.tamanhoBytes || null
+              tamanhoBytes: f.tamanhoBytes || null,
+              base64: f.base64 || null
             }))
           }
         },
