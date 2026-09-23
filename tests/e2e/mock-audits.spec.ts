@@ -67,11 +67,12 @@ test.describe('E2E - Mock de Dados e Validação de Fluxos Completos', () => {
 
     // 5. Valida que a loja pendente LIBERA o formulário completo
     await expect(page.locator('text=Loja liberada para auditoria de campo')).toBeVisible();
-    await expect(page.locator('text=Status de Entrada no PDV')).toBeVisible();
-    await expect(page.locator('text=Geladeira de Bebidas')).toBeVisible();
-    await expect(page.locator('text=Presença Monster & Coca-Cola')).toBeVisible();
-    await expect(page.locator('text=Área do Caixa & Display "Coca-Cola Vai Até Você"')).toBeVisible();
-    await expect(page.locator('text=Fotos Obrigatórias da Auditoria')).toBeVisible();
+    await expect(page.locator('text=Registro Inicial')).toBeVisible();
+    await page.locator('button:has-text("Loja aberta e operando")').click();
+    await expect(page.getByText('Geladeira de Bebidas', { exact: true })).toBeVisible();
+    await expect(page.locator('text=Presença de Monster')).toBeVisible();
+    await expect(page.getByText('Caixa e Entorno – Display')).toBeVisible();
+    await expect(page.locator('text=Fotos Obrigatórias')).toBeVisible();
   });
 
   test('E2E Exportações: Download de Relatório CSV e Arquivo ZIP', async ({ request }) => {

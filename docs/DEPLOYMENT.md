@@ -88,7 +88,9 @@ Na aba **Variables** do serviço da aplicação, adicione:
 - `DATABASE_URL`: `${{Postgres.DATABASE_URL}}` *(ou selecione "Add Reference" apontando para o PostgreSQL)*
 - `NODE_ENV`: `production`
 - `GOOGLE_DRIVE_FOLDER_ID`: `11ax5g10dzEhEql3fGS3i-uxwz6vduKvj`
-- `GOOGLE_DRIVE_WEBHOOK_URL`: `https://script.google.com/macros/s/AKfycbzEoY_fr0aHz-2dY77sn49M6033Pranfceew2Y6OXSlwewmL21m9iw8YsRrUyQd4BKy/exec`
+- `GOOGLE_DRIVE_WEBHOOK_URL`: URL `/exec` do Web App do Google Apps Script (não registre essa URL no repositório: ela dá acesso de escrita à pasta do Drive)
+- `COORD_PIN`: PIN de acesso ao painel do coordenador (sem ele o painel, os exports e o reset de lojas ficam abertos)
+- `COORD_SESSION_SECRET` *(opcional)*: segredo das sessões do coordenador. Se definido, as sessões sobrevivem a reinícios do servidor
 
 *(Nota: A variável `PORT` é injetada automaticamente pelo Railway).*
 

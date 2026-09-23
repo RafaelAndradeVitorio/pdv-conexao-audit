@@ -1,6 +1,16 @@
 import { PrismaClient } from '@prisma/client';
 import fs from 'fs';
 import path from 'path';
+import {
+  fotosObrigatorias,
+  MARCA_VISUAL_GELADEIRA,
+  POSSE_GELADEIRA,
+  ORGANIZACAO_GELADEIRA,
+  ABASTECIMENTO_GELADEIRA,
+  VISIBILIDADE_MARCAS,
+  ESPACO_DISPONIVEL,
+  CATEGORIAS_BEBIDA
+} from '../src/shared/constants';
 
 const prisma = new PrismaClient();
 
@@ -84,16 +94,17 @@ export async function seedMockAudits() {
       const existeGeladeira = i % 10 !== 9; // 90% tem geladeira
       const marcasPresentes = marcasPool.slice(0, 3 + (i % 7));
 
-      // Grava 6 fotos físicas no disco
+      const concorrentesMisturados = existeGeladeira && i % 3 === 0;
+      const espacoLivreCaixa = i % 5 !== 4;
+
+      // Grava no disco as fotos exigidas pelas respostas
       const fotosParaCriar = [];
-      const tiposFoto = [
-        'foto_fachada',
-        'foto_geladeira',
-        'foto_marcas',
-        'foto_concorrentes',
-        'foto_caixa',
-        'foto_display'
-      ];
+      const tiposFoto = fotosObrigatorias({
+        inoperante: false,
+        existeGeladeira,
+        concorrentesMisturados,
+        espacoLivreCaixa
+      });
 
       for (const tipo of tiposFoto) {
         const timestamp = auditadaEm.getTime() + Math.floor(Math.random() * 5000);
@@ -114,17 +125,31 @@ export async function seedMockAudits() {
           pesquisadorId: pesq.id,
           statusEntrada: 'Loja aberta e operando',
           existeGeladeira,
-          marcaVisualGeladeira: existeGeladeira ? (i % 3 === 0 ? 'Coca-Cola' : i % 3 === 1 ? 'Monster' : 'Outra') : null,
-          posseGeladeira: existeGeladeira ? (i % 2 === 0 ? 'FEMSA' : 'Monster') : null,
-          organizacaoGeladeira: existeGeladeira ? (i % 2 === 0 ? 'Cheia' : 'Boa') : null,
-          monsterPresente: true,
-          monsterNaGeladeira: i % 4 !== 0,
+          marcaVisualGeladeira: existeGeladeira ? MARCA_VISUAL_GELADEIRA[i % MARCA_VISUAL_GELADEIRA.length] : null,
+          posseGeladeira: existeGeladeira ? POSSE_GELADEIRA[i % POSSE_GELADEIRA.length] : null,
+          organizacaoGeladeira: existeGeladeira ? ORGANIZACAO_GELADEIRA[i % 2] : null,
+          abastecimentoGeladeira: existeGeladeira ? ABASTECIMENTO_GELADEIRA[i % ABASTECIMENTO_GELADEIRA.length] : null,
+          visibilidadeMarcas: existeGeladeira ? VISIBILIDADE_MARCAS[i % VISIBILIDADE_MARCAS.length] : null,
+          monsterPresente: i % 6 !== 5,
+          monsterNaGeladeira: existeGeladeira && i % 6 !== 5 ? i % 4 !== 0 : null,
           marcasCocaPresentes: JSON.stringify(marcasPresentes),
-          concorrentesMisturados: i % 3 === 0,
-          concorrentesDetalhes: i % 3 === 0 ? 'Pepsi 350ml e Guaraná Antarctica na 2ª prateleira' : null,
-          espacoLivreCaixa: true,
-          espacoLadoTamanho: 'Balcão direito, aprox. 50cm livres ao lado da maquininha',
+          mapaBebidas: existeGeladeira
+            ? JSON.stringify(
+                CATEGORIAS_BEBIDA.map((categoria, c) => {
+                  const tem = (i + c) % 4 !== 3;
+                  return { categoria, tem, marcas: tem ? '' : null, concorrentes: tem ? (i + c) % 3 === 0 : null };
+                })
+              )
+            : null,
+          concorrentesMisturados: existeGeladeira ? concorrentesMisturados : null,
+          concorrentesDetalhes: concorrentesMisturados ? 'Pepsi 350ml e Guaraná Antarctica na 2ª prateleira' : null,
+          espacoLivreCaixa,
+          espacoLadoTamanho: espacoLivreCaixa ? 'Balcão direito, aprox. 50cm livres ao lado da maquininha' : null,
+          boaVisibilidadeCaixa: espacoLivreCaixa ? i % 2 === 0 : null,
+          espacoDisponivel: ESPACO_DISPONIVEL[i % ESPACO_DISPONIVEL.length],
           outrosDisplaysImpulso: i % 4 === 0,
+          displaysImpulsoMarcas: i % 4 === 0 ? 'Fini, Trident' : null,
+          displaysImpulsoProximo: i % 4 === 0 ? true : null,
           potencialDisplay: i % 3 === 0 ? 'Alto' : i % 3 === 1 ? 'Médio' : 'Baixo',
           descricaoOportunidade: 'Excelente visibilidade e alto fluxo de passageiros no mezanino.',
           createdAt: auditadaEm,

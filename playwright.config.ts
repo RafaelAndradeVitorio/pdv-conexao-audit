@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// E2E_PORT permite rodar os testes com outro app ocupando a porta 3000
+const PORT = Number(process.env.E2E_PORT || 3000);
+
 export default defineConfig({
   testDir: './tests/e2e',
   globalSetup: './tests/e2e/global-setup.ts',
@@ -12,7 +15,7 @@ export default defineConfig({
   retries: 0,
   reporter: 'list',
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: `http://localhost:${PORT}`,
     trace: 'on-first-retry',
   },
   projects: [
@@ -27,7 +30,8 @@ export default defineConfig({
   ],
   webServer: {
     command: 'node dist-server/server/server.js',
-    port: 3000,
+    port: PORT,
+    env: { PORT: String(PORT) },
     reuseExistingServer: true,
     timeout: 30000,
   },

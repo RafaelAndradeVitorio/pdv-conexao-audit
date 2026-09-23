@@ -1,18 +1,34 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAppStore } from '../stores/researcherStore';
-import { useSubmitAuditoria } from '../hooks/useAuditData';
+import { useFilaEnvio } from '../hooks/useFilaEnvio';
+import { enfileirarEEnviar, descartarDaFila, EnvioPendente, FotoPendente } from '../utils/filaEnvio';
+import { gravar, ler, remover } from '../utils/armazenamentoLocal';
 import { Loja } from '../../shared/types';
 import {
   STATUS_ENTRADA,
   MARCA_VISUAL_GELADEIRA,
   POSSE_GELADEIRA,
   ORGANIZACAO_GELADEIRA,
+  ABASTECIMENTO_GELADEIRA,
+  VISIBILIDADE_MARCAS,
+  ESPACO_DISPONIVEL,
   POTENCIAL_DISPLAY,
-  MARCAS_COCA_COLA
+  MARCAS_COCA_COLA,
+  CATEGORIAS_BEBIDA,
+  CategoriaBebida,
+  fotosObrigatorias
 } from '../../shared/constants';
+import { AuditoriaSubmissionSchema, MapaBebidaItem } from '../../shared/schemas';
 import { ResearcherSelector } from '../components/ResearcherSelector';
 import { StoreSelector } from '../components/StoreSelector';
 import { PhotoCaptureGrid, PhotoState } from '../components/PhotoCaptureGrid';
+import {
+  ChecklistSection,
+  SimNaoToggle,
+  OpcoesChips,
+  inputClass,
+  textareaClass
+} from '../components/ChecklistControls';
 import {
   AlertCircle,
   Send,
@@ -23,71 +39,217 @@ import {
   ShoppingBag,
   DollarSign,
   DoorOpen,
-  Check
+  Check,
+  GlassWater,
+  EyeOff,
+  CloudUpload,
+  History
 } from 'lucide-react';
 
+type Opcao<T extends readonly string[]> = T[number] | null;
+
+interface ChecklistState {
+  existeGeladeira: boolean | null;
+  marcaVisualGeladeira: Opcao<typeof MARCA_VISUAL_GELADEIRA>;
+  posseGeladeira: Opcao<typeof POSSE_GELADEIRA>;
+
+  monsterPresente: boolean | null;
+  monsterNaGeladeira: boolean | null;
+
+  mapaBebidas: MapaBebidaItem[];
+  marcasCocaPresentes: string[];
+
+  organizacaoGeladeira: Opcao<typeof ORGANIZACAO_GELADEIRA>;
+  abastecimentoGeladeira: Opcao<typeof ABASTECIMENTO_GELADEIRA>;
+  visibilidadeMarcas: Opcao<typeof VISIBILIDADE_MARCAS>;
+  concorrentesMisturados: boolean | null;
+  concorrentesDetalhes: string;
+
+  espacoLivreCaixa: boolean | null;
+  espacoLadoTamanho: string;
+  boaVisibilidadeCaixa: boolean | null;
+  produtosExpostosCaixa: string;
+  espacoDisponivel: Opcao<typeof ESPACO_DISPONIVEL>;
+  outrosDisplaysImpulso: boolean | null;
+  displaysImpulsoMarcas: string;
+  displaysImpulsoProximo: boolean | null;
+  potencialDisplay: Opcao<typeof POTENCIAL_DISPLAY>;
+  descricaoOportunidade: string;
+}
+
+// Nada vem pré-preenchido: o guia pede para não inventar informação (§12)
+const checklistInicial = (): ChecklistState => ({
+  existeGeladeira: null,
+  marcaVisualGeladeira: null,
+  posseGeladeira: null,
+  monsterPresente: null,
+  monsterNaGeladeira: null,
+  mapaBebidas: CATEGORIAS_BEBIDA.map((categoria) => ({ categoria, tem: null, marcas: '', concorrentes: null })),
+  marcasCocaPresentes: [],
+  organizacaoGeladeira: null,
+  abastecimentoGeladeira: null,
+  visibilidadeMarcas: null,
+  concorrentesMisturados: null,
+  concorrentesDetalhes: '',
+  espacoLivreCaixa: null,
+  espacoLadoTamanho: '',
+  boaVisibilidadeCaixa: null,
+  produtosExpostosCaixa: '',
+  espacoDisponivel: null,
+  outrosDisplaysImpulso: null,
+  displaysImpulsoMarcas: '',
+  displaysImpulsoProximo: null,
+  potencialDisplay: null,
+  descricaoOportunidade: ''
+});
+
+interface Rascunho {
+  statusEntrada: string | null;
+  justificativaInoperante: string;
+  form: ChecklistState;
+  photos: Record<string, PhotoState>;
+  salvoEm: string;
+}
+
+// Loja em andamento: sobrevive a recarregar a página ou fechar o app no meio da visita
+const CHAVE_LOJA_EM_ANDAMENTO = 'pdv_loja_em_andamento';
+
+const lerLojaEmAndamento = (): Loja | null => {
+  try {
+    const raw = localStorage.getItem(CHAVE_LOJA_EM_ANDAMENTO);
+    return raw ? (JSON.parse(raw) as Loja) : null;
+  } catch {
+    return null;
+  }
+};
+
+const salvarLojaEmAndamento = (loja: Loja | null) => {
+  try {
+    if (loja) localStorage.setItem(CHAVE_LOJA_EM_ANDAMENTO, JSON.stringify(loja));
+    else localStorage.removeItem(CHAVE_LOJA_EM_ANDAMENTO);
+  } catch {
+    // Sem localStorage: só não lembra a loja ao recarregar
+  }
+};
+
+const horaCurta = (iso: string) =>
+  new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
 export const ResearcherFlow: React.FC = () => {
-  const { pesquisadorId, pesquisadorNome } = useAppStore();
-  const [selectedLoja, setSelectedLoja] = useState<Loja | null>(null);
-  
-  // Status de Entrada
-  const [statusEntrada, setStatusEntrada] = useState<string>(STATUS_ENTRADA.ABERTA);
+  const { pesquisadorId } = useAppStore();
+  const [selectedLoja, setSelectedLojaState] = useState<Loja | null>(lerLojaEmAndamento);
+  const { itens: fila } = useFilaEnvio();
+
+  const [statusEntrada, setStatusEntrada] = useState<string | null>(null);
   const [justificativaInoperante, setJustificativaInoperante] = useState('');
-
-  // Checklist Geladeira
-  const [existeGeladeira, setExisteGeladeira] = useState<boolean>(true);
-  const [marcaVisualGeladeira, setMarcaVisualGeladeira] = useState<string>('Coca-Cola');
-  const [posseGeladeira, setPosseGeladeira] = useState<string>('FEMSA');
-  const [organizacaoGeladeira, setOrganizacaoGeladeira] = useState<string>('Cheia');
-
-  // Checklist Monster & Coca-Cola
-  const [monsterPresente, setMonsterPresente] = useState<boolean>(true);
-  const [monsterNaGeladeira, setMonsterNaGeladeira] = useState<boolean>(true);
-  const [marcasCocaPresentes, setMarcasCocaPresentes] = useState<string[]>([
-    'Coca-Cola',
-    'Fanta',
-    'Sprite',
-    'Monster'
-  ]);
-
-  // Checklist Concorrência
-  const [concorrentesMisturados, setConcorrentesMisturados] = useState<boolean>(false);
-  const [concorrentesDetalhes, setConcorrentesDetalhes] = useState('');
-
-  // Checklist Área do Caixa & Display
-  const [espacoLivreCaixa, setEspacoLivreCaixa] = useState<boolean>(true);
-  const [espacoLadoTamanho, setEspacoLadoTamanho] = useState('Lado direito do caixa, ~60cm livres');
-  const [outrosDisplaysImpulso, setOutrosDisplaysImpulso] = useState<boolean>(false);
-  const [potencialDisplay, setPotencialDisplay] = useState<string>('Alto');
-  const [descricaoOportunidade, setDescricaoOportunidade] = useState('');
-
-  // Estado das Fotos
+  const [form, setForm] = useState<ChecklistState>(checklistInicial);
   const [photos, setPhotos] = useState<Record<string, PhotoState>>({});
 
-  // Feedback de envio
   const [submitSuccessMessage, setSubmitSuccessMessage] = useState<string | null>(null);
-  const [submitErrorMessage, setSubmitErrorMessage] = useState<string | null>(null);
+  const [enviadaOffline, setEnviadaOffline] = useState(false);
+  const [submitErrors, setSubmitErrors] = useState<string[]>([]);
+  const [enviando, setEnviando] = useState(false);
 
-  const submitMutation = useSubmitAuditoria();
+  // Rascunho: id da loja cujo rascunho já foi lido (antes disso não grava, para não apagar o salvo)
+  const [rascunhoPronto, setRascunhoPronto] = useState<string | null>(null);
+  const [rascunhoRestaurado, setRascunhoRestaurado] = useState<string | null>(null);
 
-  const isLojaBloqueada = selectedLoja?.status === 'CONCLUIDA' || selectedLoja?.status === 'FINALIZADA_INOPERANTE';
-  const isInoperante = statusEntrada !== STATUS_ENTRADA.ABERTA;
+  const envioNaFila = selectedLoja ? fila.find((i) => i.lojaId === selectedLoja.id) : undefined;
 
-  const toggleMarcaCoca = (marca: string) => {
-    setMarcasCocaPresentes((prev) =>
-      prev.includes(marca) ? prev.filter((m) => m !== marca) : [...prev, marca]
-    );
+  const setSelectedLoja = (loja: Loja | null) => {
+    salvarLojaEmAndamento(loja);
+    setSelectedLojaState(loja);
   };
 
-  const handlePhotoUploaded = (
-    tipo: string,
-    data: { url: string; size: number; previewUrl: string }
-  ) => {
+  const limparFormulario = () => {
+    setStatusEntrada(null);
+    setJustificativaInoperante('');
+    setForm(checklistInicial());
+    setPhotos({});
+  };
+
+  // Ao escolher uma loja, restaura o rascunho dela (se houver)
+  useEffect(() => {
+    let ativo = true;
+    setRascunhoPronto(null);
+    setRascunhoRestaurado(null);
+    limparFormulario();
+    if (!selectedLoja) return;
+
+    ler<Rascunho>('rascunhos', selectedLoja.id).then((r) => {
+      if (!ativo) return;
+      if (r) {
+        setStatusEntrada(r.statusEntrada);
+        setJustificativaInoperante(r.justificativaInoperante);
+        setForm({ ...checklistInicial(), ...r.form });
+        setPhotos(r.photos);
+        setRascunhoRestaurado(r.salvoEm);
+      }
+      setRascunhoPronto(selectedLoja.id);
+    });
+    return () => {
+      ativo = false;
+    };
+  }, [selectedLoja?.id]);
+
+  // Salva o rascunho a cada alteração
+  useEffect(() => {
+    if (!selectedLoja || rascunhoPronto !== selectedLoja.id) return;
+    if (statusEntrada === null && Object.keys(photos).length === 0) return;
+    const timer = window.setTimeout(() => {
+      gravar<Rascunho>('rascunhos', selectedLoja.id, {
+        statusEntrada,
+        justificativaInoperante,
+        form,
+        photos,
+        salvoEm: new Date().toISOString()
+      });
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [selectedLoja, rascunhoPronto, statusEntrada, justificativaInoperante, form, photos]);
+
+  const descartarRascunho = async () => {
+    if (!selectedLoja || !window.confirm('Apagar as respostas e fotos salvas desta loja?')) return;
+    await remover('rascunhos', selectedLoja.id);
+    setRascunhoRestaurado(null);
+    limparFormulario();
+  };
+
+  const isLojaBloqueada = selectedLoja?.status === 'CONCLUIDA' || selectedLoja?.status === 'FINALIZADA_INOPERANTE';
+  const isInoperante = statusEntrada !== null && statusEntrada !== STATUS_ENTRADA.ABERTA;
+  const temGeladeira = form.existeGeladeira === true;
+
+  const tiposFoto = statusEntrada
+    ? fotosObrigatorias({
+        inoperante: isInoperante,
+        existeGeladeira: form.existeGeladeira,
+        concorrentesMisturados: form.concorrentesMisturados,
+        espacoLivreCaixa: form.espacoLivreCaixa
+      })
+    : [];
+
+  const set = <K extends keyof ChecklistState>(campo: K, valor: ChecklistState[K]) =>
+    setForm((prev) => ({ ...prev, [campo]: valor }));
+
+  const setMapa = (categoria: CategoriaBebida, patch: Partial<MapaBebidaItem>) =>
+    setForm((prev) => ({
+      ...prev,
+      mapaBebidas: prev.mapaBebidas.map((m) => (m.categoria === categoria ? { ...m, ...patch } : m))
+    }));
+
+  const toggleMarcaCoca = (marca: string) =>
+    setForm((prev) => ({
+      ...prev,
+      marcasCocaPresentes: prev.marcasCocaPresentes.includes(marca)
+        ? prev.marcasCocaPresentes.filter((m) => m !== marca)
+        : [...prev.marcasCocaPresentes, marca]
+    }));
+
+  const handlePhotoCaptured = (tipo: string, data: { size: number; previewUrl: string }) => {
     setPhotos((prev) => ({
       ...prev,
       [tipo]: {
         tipo,
-        url: data.url,
         previewUrl: data.previewUrl,
         status: 'success',
         compressedKb: Math.round(data.size / 1024)
@@ -103,104 +265,151 @@ export const ResearcherFlow: React.FC = () => {
     });
   };
 
+  // Só envia fotos ainda exigidas pelas respostas atuais
+  const fotosParaEnvio = (): FotoPendente[] =>
+    Object.values(photos)
+      .filter((p) => !!p.previewUrl && tiposFoto.includes(p.tipo as (typeof tiposFoto)[number]))
+      .map((p) => ({
+        tipo: p.tipo,
+        base64: p.previewUrl!,
+        tamanhoBytes: (p.compressedKb || 300) * 1024
+      }));
+
+  const montarPayload = (loja: Loja, pesquisador: string, status: string) => {
+    const base = {
+      lojaId: loja.id,
+      pesquisadorId: pesquisador,
+      statusEntrada: status
+    };
+
+    if (isInoperante) {
+      return { ...base, justificativaInoperante };
+    }
+
+    const f = form;
+    const texto = (v: string) => v.trim() || null;
+    return {
+      ...base,
+      justificativaInoperante: null,
+      existeGeladeira: f.existeGeladeira,
+      marcaVisualGeladeira: temGeladeira ? f.marcaVisualGeladeira : null,
+      posseGeladeira: temGeladeira ? f.posseGeladeira : null,
+      monsterPresente: f.monsterPresente,
+      monsterNaGeladeira: f.monsterPresente && temGeladeira ? f.monsterNaGeladeira : f.monsterPresente === false ? false : null,
+      mapaBebidas: temGeladeira
+        ? f.mapaBebidas.map((m) => ({
+            ...m,
+            marcas: m.tem ? m.marcas?.trim() || null : null,
+            concorrentes: m.tem ? m.concorrentes : null
+          }))
+        : [],
+      marcasCocaPresentes: f.marcasCocaPresentes,
+      organizacaoGeladeira: temGeladeira ? f.organizacaoGeladeira : null,
+      abastecimentoGeladeira: temGeladeira ? f.abastecimentoGeladeira : null,
+      visibilidadeMarcas: temGeladeira ? f.visibilidadeMarcas : null,
+      concorrentesMisturados: temGeladeira ? f.concorrentesMisturados : null,
+      concorrentesDetalhes: temGeladeira && f.concorrentesMisturados ? texto(f.concorrentesDetalhes) : null,
+      espacoLivreCaixa: f.espacoLivreCaixa,
+      espacoLadoTamanho: f.espacoLivreCaixa ? texto(f.espacoLadoTamanho) : null,
+      boaVisibilidadeCaixa: f.espacoLivreCaixa ? f.boaVisibilidadeCaixa : null,
+      produtosExpostosCaixa: texto(f.produtosExpostosCaixa),
+      espacoDisponivel: f.espacoDisponivel,
+      outrosDisplaysImpulso: f.outrosDisplaysImpulso,
+      displaysImpulsoMarcas: f.outrosDisplaysImpulso ? texto(f.displaysImpulsoMarcas) : null,
+      displaysImpulsoProximo: f.outrosDisplaysImpulso ? f.displaysImpulsoProximo : null,
+      potencialDisplay: f.potencialDisplay,
+      descricaoOportunidade: texto(f.descricaoOportunidade)
+    };
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitSuccessMessage(null);
-    setSubmitErrorMessage(null);
+    setSubmitErrors([]);
 
     if (!pesquisadorId) {
-      setSubmitErrorMessage('Por favor, selecione quem é o pesquisador responsável no topo da página.');
+      setSubmitErrors(['Selecione quem é o pesquisador responsável no topo da página.']);
       return;
     }
-
     if (!selectedLoja) {
-      setSubmitErrorMessage('Por favor, selecione a loja a ser auditada.');
+      setSubmitErrors(['Selecione a loja a ser auditada.']);
       return;
     }
-
     if (isLojaBloqueada) {
-      setSubmitErrorMessage('Esta loja já foi auditada anteriormente e está bloqueada para envio.');
+      setSubmitErrors(['Esta loja já foi auditada anteriormente e está bloqueada para envio.']);
+      return;
+    }
+    if (!statusEntrada) {
+      setSubmitErrors(['Informe o registro inicial da loja (aberta, fechada, em reforma ou outro).']);
       return;
     }
 
-    // Validação de fotos
-    const fotosArray = Object.values(photos)
-      .filter((p) => !!p.url)
-      .map((p) => ({
-        tipo: p.tipo,
-        url: p.url!,
-        tamanhoBytes: (p.compressedKb || 300) * 1024,
-        base64: p.previewUrl || undefined
-      }));
-
-    if (isInoperante) {
-      if (!justificativaInoperante || justificativaInoperante.trim().length < 10) {
-        setSubmitErrorMessage('Para lojas fechadas/inoperantes, insira uma justificativa com no mínimo 10 caracteres.');
-        return;
-      }
-      const temFotoFachada = fotosArray.some((f) => f.tipo === 'foto_fachada');
-      if (!temFotoFachada) {
-        setSubmitErrorMessage('A Foto 01 (Fachada) é obrigatória para comprovação da loja inoperante.');
-        return;
-      }
-    } else {
-      if (fotosArray.length < 6) {
-        setSubmitErrorMessage(`São obrigatórias as 6 fotos do checklist. Foram enviadas ${fotosArray.length} fotos.`);
-        return;
-      }
+    // Mesma validação do servidor, para apontar tudo o que falta antes de enviar.
+    // As fotos ainda não têm URL (sobem pela fila), então valida com uma URL provisória.
+    const fotos = fotosParaEnvio();
+    const validacao = AuditoriaSubmissionSchema.safeParse({
+      ...montarPayload(selectedLoja, pesquisadorId, statusEntrada),
+      fotos: fotos.map((f) => ({ tipo: f.tipo, url: 'aguardando-envio' }))
+    });
+    if (!validacao.success) {
+      setSubmitErrors([...new Set(validacao.error.issues.map((i) => i.message))]);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
     }
 
-    const payload: any = {
+    const { fotos: _provisorias, ...payload } = validacao.data;
+    const envio: EnvioPendente = {
       lojaId: selectedLoja.id,
+      lojaNome: selectedLoja.nome,
+      cnpj: selectedLoja.cnpj,
       pesquisadorId,
-      statusEntrada,
-      justificativaInoperante: isInoperante ? justificativaInoperante : null,
-      fotos: fotosArray
+      payload,
+      fotos,
+      criadoEm: new Date().toISOString(),
+      tentativas: 0,
+      situacao: 'aguardando'
     };
 
-    if (!isInoperante) {
-      payload.existeGeladeira = existeGeladeira;
-      payload.marcaVisualGeladeira = existeGeladeira ? marcaVisualGeladeira : null;
-      payload.posseGeladeira = existeGeladeira ? posseGeladeira : null;
-      payload.organizacaoGeladeira = existeGeladeira ? organizacaoGeladeira : null;
-      payload.monsterPresente = monsterPresente;
-      payload.monsterNaGeladeira = monsterPresente ? monsterNaGeladeira : null;
-      payload.marcasCocaPresentes = marcasCocaPresentes;
-      payload.concorrentesMisturados = concorrentesMisturados;
-      payload.concorrentesDetalhes = concorrentesMisturados ? concorrentesDetalhes : null;
-      payload.espacoLivreCaixa = espacoLivreCaixa;
-      payload.espacoLadoTamanho = espacoLivreCaixa ? espacoLadoTamanho : null;
-      payload.outrosDisplaysImpulso = outrosDisplaysImpulso;
-      payload.potencialDisplay = potencialDisplay;
-      payload.descricaoOportunidade = descricaoOportunidade;
-    }
-
+    setEnviando(true);
     try {
-      await submitMutation.mutateAsync(payload);
+      const r = await enfileirarEEnviar(envio);
+      if (r.resultado === 'erro') {
+        // Recusada pelo servidor (ex.: loja já auditada por outra pessoa): mantém o formulário
+        await descartarDaFila(envio.lojaId);
+        setSubmitErrors([r.mensagem]);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
+      await remover('rascunhos', envio.lojaId);
+      setEnviadaOffline(r.resultado === 'tentar-depois');
       setSubmitSuccessMessage(
-        `Auditoria da loja ${selectedLoja.nome} finalizada com sucesso como ${
-          isInoperante ? 'FINALIZADA_INOPERANTE' : 'CONCLUIDA'
-        }!`
+        r.resultado === 'enviado'
+          ? `Auditoria da loja ${envio.lojaNome} finalizada com sucesso como ${
+              isInoperante ? 'FINALIZADA_INOPERANTE' : 'CONCLUIDA'
+            }!`
+          : `Sem conexão agora. A auditoria da loja ${envio.lojaNome} ficou salva no aparelho e será enviada automaticamente quando o sinal voltar.`
       );
-      // Resetar formulário
       setSelectedLoja(null);
-      setPhotos({});
-      setJustificativaInoperante('');
-      setDescricaoOportunidade('');
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (err: any) {
-      setSubmitErrorMessage(err.message || 'Erro ao enviar auditoria.');
+    } finally {
+      setEnviando(false);
     }
   };
 
   return (
     <div className="max-w-xl mx-auto px-4 py-4 space-y-4 font-roboto">
-      {/* Notificação de Sucesso (Android M3 Success Container) */}
       {submitSuccessMessage && (
         <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-3xl text-emerald-900 dark:text-emerald-200 flex items-start gap-3 shadow-sm">
-          <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+          {enviadaOffline ? (
+            <CloudUpload className="w-6 h-6 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+          ) : (
+            <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+          )}
           <div>
-            <h4 className="font-bold text-sm text-emerald-900 dark:text-emerald-100">Auditoria Enviada!</h4>
+            <h4 className="font-bold text-sm text-emerald-900 dark:text-emerald-100">
+              {enviadaOffline ? 'Auditoria salva no aparelho' : 'Auditoria Enviada!'}
+            </h4>
             <p className="text-xs text-emerald-800 dark:text-emerald-200/90 mt-0.5">{submitSuccessMessage}</p>
             <button
               onClick={() => setSubmitSuccessMessage(null)}
@@ -212,36 +421,66 @@ export const ResearcherFlow: React.FC = () => {
         </div>
       )}
 
-      {/* Notificação de Erro (Android M3 Error Container) */}
-      {submitErrorMessage && (
+      {submitErrors.length > 0 && (
         <div className="p-4 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 rounded-3xl text-rose-900 dark:text-rose-200 flex items-start gap-3 shadow-sm">
           <AlertCircle className="w-6 h-6 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
-          <div>
-            <h4 className="font-bold text-sm text-rose-900 dark:text-rose-100">Não foi possível enviar</h4>
-            <p className="text-xs text-rose-800 dark:text-rose-200/90 mt-0.5">{submitErrorMessage}</p>
+          <div className="min-w-0">
+            <h4 className="font-bold text-sm text-rose-900 dark:text-rose-100">
+              {submitErrors.length > 1 ? `Faltam ${submitErrors.length} itens para enviar` : 'Não foi possível enviar'}
+            </h4>
+            <ul className="text-xs text-rose-800 dark:text-rose-200/90 mt-1 space-y-0.5 list-disc pl-4">
+              {submitErrors.map((msg) => (
+                <li key={msg}>{msg}</li>
+              ))}
+            </ul>
           </div>
         </div>
       )}
 
-      {/* 1. Identificação do Pesquisador */}
       <ResearcherSelector />
 
-      {/* 2. Seleção de Loja com Trava Anti-Duplicidade */}
       <StoreSelector selectedLoja={selectedLoja} onSelectLoja={setSelectedLoja} />
 
-      {/* Formulário de Auditoria (Apenas se houver loja selecionada e não bloqueada) */}
-      {selectedLoja && !isLojaBloqueada && (
+      {selectedLoja && envioNaFila && (
+        <div className="p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-3xl text-amber-900 dark:text-amber-200 flex items-start gap-3 text-xs">
+          <CloudUpload className="w-5 h-5 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="font-bold text-sm">
+              {envioNaFila.situacao === 'erro' ? 'Envio desta loja precisa de atenção' : 'Auditoria desta loja aguardando envio'}
+            </p>
+            <p>
+              Finalizada às {horaCurta(envioNaFila.criadoEm)} e salva no aparelho.
+              {envioNaFila.mensagem ? ` Última tentativa: ${envioNaFila.mensagem}.` : ''}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {selectedLoja && !isLojaBloqueada && !envioNaFila && rascunhoRestaurado && (
+        <div className="p-3.5 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 rounded-2xl text-blue-900 dark:text-blue-200 flex items-center justify-between gap-3 text-xs">
+          <span className="flex items-center gap-2 min-w-0">
+            <History className="w-4 h-4 shrink-0" />
+            <span>Rascunho restaurado (salvo às {horaCurta(rascunhoRestaurado)}).</span>
+          </span>
+          <button type="button" onClick={descartarRascunho} className="font-semibold underline shrink-0">
+            Descartar
+          </button>
+        </div>
+      )}
+
+      {selectedLoja && !isLojaBloqueada && !envioNaFila && (
         <form onSubmit={handleSubmit} className="space-y-4">
-          
-          {/* 3. Status de Entrada no PDV */}
-          <div className="bg-white dark:bg-[#131B2B] border border-slate-200/90 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-sm">
-            <label className="text-[13px] font-bold text-blue-900 dark:text-blue-300 tracking-wide flex items-center gap-2 mb-3">
-              <div className="h-7 w-7 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
-                <DoorOpen className="w-4 h-4" />
-              </div>
-              Status de Entrada no PDV
-            </label>
-            
+          {/* Guia §2: visita discreta */}
+          <div className="p-3.5 bg-slate-50 dark:bg-[#0B0F19] border border-slate-200 dark:border-slate-800 rounded-2xl flex items-start gap-2.5 text-[11px] text-slate-600 dark:text-slate-400 leading-snug">
+            <EyeOff className="w-4 h-4 shrink-0 text-slate-500 mt-0.5" />
+            <span>
+              Entre como consumidor comum, sem informar que é pesquisa. Se precisar perguntar, use perguntas simples
+              ("Essa geladeira é de vocês?"). Quando não der para confirmar algo, marque "Não foi possível identificar".
+            </span>
+          </div>
+
+          {/* §3 Registro inicial */}
+          <ChecklistSection icon={<DoorOpen className="w-4 h-4" />} titulo="Registro Inicial">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {Object.entries(STATUS_ENTRADA).map(([key, label]) => {
                 const isSelected = statusEntrada === label;
@@ -249,6 +488,7 @@ export const ResearcherFlow: React.FC = () => {
                   <button
                     key={key}
                     type="button"
+                    aria-pressed={isSelected}
                     onClick={() => setStatusEntrada(label)}
                     className={`p-3.5 text-xs font-semibold rounded-2xl border text-left transition-all touch-manipulation flex items-center justify-between min-w-0 ${
                       isSelected
@@ -263,191 +503,120 @@ export const ResearcherFlow: React.FC = () => {
               })}
             </div>
 
-            {/* Justificativa caso inoperante */}
             {isInoperante && (
-              <div className="mt-3.5 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-2xl space-y-2">
+              <div className="p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-2xl space-y-2">
                 <label className="text-xs font-bold text-amber-900 dark:text-amber-200 block">
-                  Justificativa da Inoperância (Obrigatória):
+                  {statusEntrada === STATUS_ENTRADA.OUTRO ? 'Descreva a situação (obrigatório):' : 'Justificativa (obrigatória):'}
                 </label>
                 <textarea
                   value={justificativaInoperante}
                   onChange={(e) => setJustificativaInoperante(e.target.value)}
-                  placeholder="Ex: Loja fechada por grades na estação, obras no mezanino ou quiosque desativado..."
+                  placeholder="Ex: Loja fechada com grades na estação, obras no mezanino, quiosque desativado..."
                   rows={3}
                   className="w-full bg-white dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 focus:border-amber-500 rounded-2xl p-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 outline-none shadow-sm transition"
                   required
                 />
                 <p className="text-[11px] text-amber-800 dark:text-amber-300">
-                  Para lojas inoperantes, tire apenas a <strong>Foto 01 (Fachada)</strong> comprovando a situação e envie.
+                  Tire apenas a foto da <strong>Visão geral / fachada</strong> comprovando a situação e envie.
                 </p>
               </div>
             )}
-          </div>
+          </ChecklistSection>
 
-          {/* 4. Checklist da Auditoria (Se aberta) */}
-          {!isInoperante && (
+          {statusEntrada === STATUS_ENTRADA.ABERTA && (
             <div className="space-y-4">
-              
-              {/* Geladeira de Bebidas */}
-              <div className="bg-white dark:bg-[#131B2B] border border-slate-200/90 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-sm space-y-3.5">
-                <div className="flex items-center gap-2 text-[13px] font-bold text-blue-900 dark:text-blue-300 tracking-wide">
-                  <div className="h-7 w-7 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
-                    <Refrigerator className="w-4 h-4" />
-                  </div>
-                  <span>Geladeira de Bebidas</span>
-                </div>
-
-                <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800 gap-2">
-                  <span className="text-xs text-slate-700 dark:text-slate-200 font-medium min-w-0">Existe geladeira no local?</span>
-                  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setExisteGeladeira(true)}
-                      className={`px-3.5 sm:px-4 py-1.5 text-xs rounded-full font-semibold transition-all touch-manipulation whitespace-nowrap ${
-                        existeGeladeira
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'bg-slate-50 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
-                      }`}
-                    >
-                      Sim
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setExisteGeladeira(false)}
-                      className={`px-3.5 sm:px-4 py-1.5 text-xs rounded-full font-semibold transition-all touch-manipulation whitespace-nowrap ${
-                        !existeGeladeira
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'bg-slate-50 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
-                      }`}
-                    >
-                      Não
-                    </button>
-                  </div>
-                </div>
-
-                {existeGeladeira && (
-                  <div className="space-y-3 pt-1">
-                    <div>
-                      <label className="text-xs text-slate-600 dark:text-slate-400 font-medium block mb-1.5">Marca Visual da Geladeira:</label>
-                      <select
-                        value={marcaVisualGeladeira}
-                        onChange={(e) => setMarcaVisualGeladeira(e.target.value)}
-                        className="w-full h-12 bg-slate-50/70 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 rounded-2xl px-4 text-xs text-slate-900 dark:text-slate-100 font-medium focus:border-blue-600"
-                      >
-                        {MARCA_VISUAL_GELADEIRA.map((m) => (
-                          <option key={m} value={m}>{m}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-xs text-slate-600 dark:text-slate-400 font-medium block mb-1.5">Posse Aparente:</label>
-                      <select
-                        value={posseGeladeira}
-                        onChange={(e) => setPosseGeladeira(e.target.value)}
-                        className="w-full h-12 bg-slate-50/70 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 rounded-2xl px-4 text-xs text-slate-900 dark:text-slate-100 font-medium focus:border-blue-600"
-                      >
-                        {POSSE_GELADEIRA.map((p) => (
-                          <option key={p} value={p}>{p}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-xs text-slate-600 dark:text-slate-400 font-medium block mb-1.5">Organização e Abastecimento:</label>
-                      <select
-                        value={organizacaoGeladeira}
-                        onChange={(e) => setOrganizacaoGeladeira(e.target.value)}
-                        className="w-full h-12 bg-slate-50/70 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 rounded-2xl px-4 text-xs text-slate-900 dark:text-slate-100 font-medium focus:border-blue-600"
-                      >
-                        {ORGANIZACAO_GELADEIRA.map((o) => (
-                          <option key={o} value={o}>{o}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
+              {/* §4 Geladeira */}
+              <ChecklistSection icon={<Refrigerator className="w-4 h-4" />} titulo="Geladeira de Bebidas">
+                <SimNaoToggle
+                  pergunta="Existe geladeira de bebidas?"
+                  value={form.existeGeladeira}
+                  onChange={(v) => set('existeGeladeira', v)}
+                />
+                {temGeladeira && (
+                  <>
+                    <OpcoesChips
+                      pergunta="A geladeira possui identificação visual de alguma marca?"
+                      opcoes={MARCA_VISUAL_GELADEIRA}
+                      value={form.marcaVisualGeladeira}
+                      onChange={(v) => set('marcaVisualGeladeira', v)}
+                    />
+                    <OpcoesChips
+                      pergunta="A geladeira aparenta pertencer a:"
+                      opcoes={POSSE_GELADEIRA}
+                      value={form.posseGeladeira}
+                      onChange={(v) => set('posseGeladeira', v)}
+                    />
+                  </>
                 )}
-              </div>
+              </ChecklistSection>
 
-              {/* Monster & Marcas Coca-Cola */}
-              <div className="bg-white dark:bg-[#131B2B] border border-slate-200/90 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-sm space-y-3.5">
-                <div className="flex items-center gap-2 text-[13px] font-bold text-blue-900 dark:text-blue-300 tracking-wide">
-                  <div className="h-7 w-7 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
-                    <Zap className="w-4 h-4" />
-                  </div>
-                  Presença Monster & Coca-Cola
-                </div>
+              {/* §5 Monster */}
+              <ChecklistSection icon={<Zap className="w-4 h-4" />} titulo="Presença de Monster">
+                <SimNaoToggle
+                  pergunta="Existe Monster na loja?"
+                  value={form.monsterPresente}
+                  onChange={(v) => set('monsterPresente', v)}
+                />
+                {form.monsterPresente && temGeladeira && (
+                  <SimNaoToggle
+                    pergunta="Existe Monster dentro de alguma geladeira?"
+                    value={form.monsterNaGeladeira}
+                    onChange={(v) => set('monsterNaGeladeira', v)}
+                  />
+                )}
+              </ChecklistSection>
 
-                <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800 gap-2">
-                  <span className="text-xs text-slate-700 dark:text-slate-200 font-medium min-w-0">Monster presente na loja?</span>
-                  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setMonsterPresente(true)}
-                      className={`px-3.5 sm:px-4 py-1.5 text-xs rounded-full font-semibold transition-all touch-manipulation whitespace-nowrap ${
-                        monsterPresente
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'bg-slate-50 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
-                      }`}
-                    >
-                      Sim
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setMonsterPresente(false)}
-                      className={`px-3.5 sm:px-4 py-1.5 text-xs rounded-full font-semibold transition-all touch-manipulation whitespace-nowrap ${
-                        !monsterPresente
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'bg-slate-50 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
-                      }`}
-                    >
-                      Não
-                    </button>
-                  </div>
-                </div>
-
-                {monsterPresente && (
-                  <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800 gap-2">
-                    <span className="text-xs text-slate-700 dark:text-slate-200 font-medium min-w-0">Monster gelado na geladeira?</span>
-                    <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => setMonsterNaGeladeira(true)}
-                        className={`px-3.5 sm:px-4 py-1.5 text-xs rounded-full font-semibold transition-all touch-manipulation whitespace-nowrap ${
-                          monsterNaGeladeira
-                            ? 'bg-blue-600 text-white shadow-sm'
-                            : 'bg-slate-50 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
-                        }`}
+              {/* §6 Mapa de bebidas */}
+              <ChecklistSection
+                icon={<GlassWater className="w-4 h-4" />}
+                titulo={temGeladeira ? 'Mapa de Bebidas da Geladeira' : 'Marcas Coca-Cola na Loja'}
+              >
+                {temGeladeira && (
+                  <div className="space-y-2.5">
+                    {form.mapaBebidas.map((item) => (
+                      <div
+                        key={item.categoria}
+                        data-categoria={item.categoria}
+                        className="p-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-[#0B0F19]/60 space-y-2"
                       >
-                        Sim
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setMonsterNaGeladeira(false)}
-                        className={`px-3.5 sm:px-4 py-1.5 text-xs rounded-full font-semibold transition-all touch-manipulation whitespace-nowrap ${
-                          !monsterNaGeladeira
-                            ? 'bg-blue-600 text-white shadow-sm'
-                            : 'bg-slate-50 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
-                        }`}
-                      >
-                        Não
-                      </button>
-                    </div>
+                        <SimNaoToggle
+                          pergunta={item.categoria}
+                          value={item.tem}
+                          onChange={(v) => setMapa(item.categoria, { tem: v })}
+                        />
+                        {item.tem && (
+                          <>
+                            <input
+                              type="text"
+                              value={item.marcas || ''}
+                              onChange={(e) => setMapa(item.categoria, { marcas: e.target.value })}
+                              placeholder="Principais marcas"
+                              className={inputClass}
+                            />
+                            <SimNaoToggle
+                              pergunta="Tem concorrentes?"
+                              value={item.concorrentes ?? null}
+                              onChange={(v) => setMapa(item.categoria, { concorrentes: v })}
+                            />
+                          </>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
 
                 <div>
                   <label className="text-xs text-slate-800 dark:text-slate-200 font-semibold block mb-2.5">
-                    Grid de Marcas Coca-Cola Presentes no PDV:
+                    Marcas Coca-Cola encontradas (toque nas que viu):
                   </label>
-                  {/* Android M3 Filter Chips (Tons Coesos) */}
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {MARCAS_COCA_COLA.map((marca) => {
-                      const checked = marcasCocaPresentes.includes(marca);
+                      const checked = form.marcasCocaPresentes.includes(marca);
                       return (
                         <button
                           key={marca}
                           type="button"
+                          aria-pressed={checked}
                           onClick={() => toggleMarcaCoca(marca)}
                           className={`p-2.5 rounded-2xl text-xs font-medium border text-left flex items-center justify-between transition-all touch-manipulation min-w-0 ${
                             checked
@@ -464,196 +633,163 @@ export const ResearcherFlow: React.FC = () => {
                     })}
                   </div>
                 </div>
-              </div>
+              </ChecklistSection>
 
-              {/* Concorrência */}
-              <div className="bg-white dark:bg-[#131B2B] border border-slate-200/90 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-sm space-y-3.5">
-                <div className="flex items-center gap-2 text-[13px] font-bold text-blue-900 dark:text-blue-300 tracking-wide">
-                  <div className="h-7 w-7 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
-                    <ShoppingBag className="w-4 h-4" />
-                  </div>
-                  <span>Concorrência na Geladeira FEMSA</span>
-                </div>
+              {/* §7 Organização e exposição */}
+              {temGeladeira && (
+                <ChecklistSection icon={<ShoppingBag className="w-4 h-4" />} titulo="Organização e Exposição">
+                  <OpcoesChips
+                    pergunta="Organização"
+                    opcoes={ORGANIZACAO_GELADEIRA}
+                    value={form.organizacaoGeladeira}
+                    onChange={(v) => set('organizacaoGeladeira', v)}
+                  />
+                  <OpcoesChips
+                    pergunta="Abastecimento"
+                    opcoes={ABASTECIMENTO_GELADEIRA}
+                    value={form.abastecimentoGeladeira}
+                    onChange={(v) => set('abastecimentoGeladeira', v)}
+                  />
+                  <OpcoesChips
+                    pergunta="Visibilidade das marcas"
+                    opcoes={VISIBILIDADE_MARCAS}
+                    value={form.visibilidadeMarcas}
+                    onChange={(v) => set('visibilidadeMarcas', v)}
+                  />
+                  <SimNaoToggle
+                    pergunta="Produtos concorrentes misturados?"
+                    value={form.concorrentesMisturados}
+                    onChange={(v) => set('concorrentesMisturados', v)}
+                  />
+                  {form.concorrentesMisturados && (
+                    <div>
+                      <label className="text-xs text-slate-600 dark:text-slate-400 font-medium block mb-1.5">
+                        Quais marcas estão misturadas e onde estão posicionadas?
+                      </label>
+                      <input
+                        type="text"
+                        value={form.concorrentesDetalhes}
+                        onChange={(e) => set('concorrentesDetalhes', e.target.value)}
+                        placeholder="Ex: Pepsi e Guaraná Antarctica na 2ª prateleira..."
+                        className={inputClass}
+                      />
+                    </div>
+                  )}
+                </ChecklistSection>
+              )}
 
-                <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800 gap-2">
-                  <span className="text-xs text-slate-700 dark:text-slate-200 font-medium min-w-0">Concorrentes misturados na geladeira?</span>
-                  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setConcorrentesMisturados(true)}
-                      className={`px-3.5 sm:px-4 py-1.5 text-xs rounded-full font-semibold transition-all touch-manipulation whitespace-nowrap ${
-                        concorrentesMisturados
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'bg-slate-50 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
-                      }`}
-                    >
-                      Sim
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConcorrentesMisturados(false)}
-                      className={`px-3.5 sm:px-4 py-1.5 text-xs rounded-full font-semibold transition-all touch-manipulation whitespace-nowrap ${
-                        !concorrentesMisturados
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'bg-slate-50 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
-                      }`}
-                    >
-                      Não
-                    </button>
-                  </div>
-                </div>
-
-                {concorrentesMisturados && (
-                  <div>
-                    <label className="text-xs text-slate-600 dark:text-slate-400 font-medium block mb-1.5">
-                      Quais marcas e em qual prateleira?
-                    </label>
-                    <input
-                      type="text"
-                      value={concorrentesDetalhes}
-                      onChange={(e) => setConcorrentesDetalhes(e.target.value)}
-                      placeholder="Ex: Pepsi e Guaraná Antarctica na 2ª prateleira..."
-                      className="w-full h-12 bg-slate-50/70 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 rounded-2xl px-4 text-xs text-slate-900 dark:text-slate-100 font-medium focus:border-blue-600 shadow-sm"
+              {/* §9 Caixa e entorno – Display Coca-Cola Vai Até Você */}
+              <ChecklistSection icon={<DollarSign className="w-4 h-4" />} titulo='Caixa e Entorno – Display "Coca-Cola Vai Até Você"'>
+                <SimNaoToggle
+                  pergunta="Existe espaço livre próximo ao caixa?"
+                  value={form.espacoLivreCaixa}
+                  onChange={(v) => set('espacoLivreCaixa', v)}
+                />
+                {form.espacoLivreCaixa && (
+                  <>
+                    <div>
+                      <label className="text-xs text-slate-600 dark:text-slate-400 font-medium block mb-1.5">
+                        Lado do caixa e espaço disponível:
+                      </label>
+                      <input
+                        type="text"
+                        value={form.espacoLadoTamanho}
+                        onChange={(e) => set('espacoLadoTamanho', e.target.value)}
+                        placeholder="Ex: Balcão à direita, ~50cm livres ao lado da máquina de cartão..."
+                        className={inputClass}
+                      />
+                    </div>
+                    <SimNaoToggle
+                      pergunta="O local tem boa visibilidade para o consumidor?"
+                      value={form.boaVisibilidadeCaixa}
+                      onChange={(v) => set('boaVisibilidadeCaixa', v)}
                     />
-                  </div>
+                  </>
                 )}
-              </div>
-
-              {/* Área do Caixa & Display "Coca-Cola Vai Até Você" */}
-              <div className="bg-white dark:bg-[#131B2B] border border-slate-200/90 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-sm space-y-3.5">
-                <div className="flex items-center gap-2 text-[13px] font-bold text-blue-900 dark:text-blue-300 tracking-wide">
-                  <div className="h-7 w-7 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
-                    <DollarSign className="w-4 h-4" />
-                  </div>
-                  <span>Área do Caixa & Display "Coca-Cola Vai Até Você"</span>
-                </div>
-
-                <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800 gap-2">
-                  <span className="text-xs text-slate-700 dark:text-slate-200 font-medium min-w-0">Espaço livre próximo ao caixa?</span>
-                  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setEspacoLivreCaixa(true)}
-                      className={`px-3.5 sm:px-4 py-1.5 text-xs rounded-full font-semibold transition-all touch-manipulation whitespace-nowrap ${
-                        espacoLivreCaixa
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'bg-slate-50 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
-                      }`}
-                    >
-                      Sim
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEspacoLivreCaixa(false)}
-                      className={`px-3.5 sm:px-4 py-1.5 text-xs rounded-full font-semibold transition-all touch-manipulation whitespace-nowrap ${
-                        !espacoLivreCaixa
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'bg-slate-50 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
-                      }`}
-                    >
-                      Não
-                    </button>
-                  </div>
-                </div>
-
-                {espacoLivreCaixa && (
-                  <div>
-                    <label className="text-xs text-slate-600 dark:text-slate-400 font-medium block mb-1.5">Lado e Dimensões do Espaço:</label>
-                    <input
-                      type="text"
-                      value={espacoLadoTamanho}
-                      onChange={(e) => setEspacoLadoTamanho(e.target.value)}
-                      placeholder="Ex: Balcão à direita, 50cm livres ao lado da máquina de cartão..."
-                      className="w-full h-12 bg-slate-50/70 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 rounded-2xl px-4 text-xs text-slate-900 dark:text-slate-100 font-medium focus:border-blue-600 shadow-sm"
-                    />
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800 gap-2">
-                  <span className="text-xs text-slate-700 dark:text-slate-200 font-medium min-w-0">Presença de outros displays de impulso?</span>
-                  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setOutrosDisplaysImpulso(true)}
-                      className={`px-3.5 sm:px-4 py-1.5 text-xs rounded-full font-semibold transition-all touch-manipulation whitespace-nowrap ${
-                        outrosDisplaysImpulso
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'bg-slate-50 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
-                      }`}
-                    >
-                      Sim
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setOutrosDisplaysImpulso(false)}
-                      className={`px-3.5 sm:px-4 py-1.5 text-xs rounded-full font-semibold transition-all touch-manipulation whitespace-nowrap ${
-                        !outrosDisplaysImpulso
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'bg-slate-50 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
-                      }`}
-                    >
-                      Não
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs text-slate-600 dark:text-slate-400 font-medium block mb-2">
-                    Avaliação de Potencial para o Display "Coca-Cola Vai Até Você":
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {POTENCIAL_DISPLAY.map((pot) => (
-                      <button
-                        key={pot}
-                        type="button"
-                        onClick={() => setPotencialDisplay(pot)}
-                        className={`py-2.5 text-xs rounded-2xl font-bold border transition-all ${
-                          potencialDisplay === pot
-                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                            : 'bg-slate-50 dark:bg-[#0B0F19] border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300'
-                        }`}
-                      >
-                        {pot}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
                 <div>
                   <label className="text-xs text-slate-600 dark:text-slate-400 font-medium block mb-1.5">
-                    Descrição da Oportunidade / Observações:
+                    Produtos atualmente expostos no caixa:
                   </label>
-                  <textarea
-                    value={descricaoOportunidade}
-                    onChange={(e) => setDescricaoOportunidade(e.target.value)}
-                    placeholder="Ex: Excelente fluxo de pessoas ao lado do caixa, operador receptivo a novos displays..."
-                    rows={2}
-                    className="w-full bg-slate-50/70 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 rounded-2xl p-3 text-xs text-slate-900 dark:text-slate-100 font-medium focus:border-blue-600 shadow-sm"
+                  <input
+                    type="text"
+                    value={form.produtosExpostosCaixa}
+                    onChange={(e) => set('produtosExpostosCaixa', e.target.value)}
+                    placeholder="Ex: Balas, chicletes, chocolates..."
+                    className={inputClass}
                   />
                 </div>
-              </div>
+
+                <SimNaoToggle
+                  pergunta="Existem displays de balas, gomas ou doces?"
+                  value={form.outrosDisplaysImpulso}
+                  onChange={(v) => set('outrosDisplaysImpulso', v)}
+                />
+                {form.outrosDisplaysImpulso && (
+                  <>
+                    <input
+                      type="text"
+                      value={form.displaysImpulsoMarcas}
+                      onChange={(e) => set('displaysImpulsoMarcas', e.target.value)}
+                      placeholder="Marcas identificadas (ex: Fini, Trident, Halls)"
+                      className={inputClass}
+                    />
+                    <SimNaoToggle
+                      pergunta="Está próxima ao caixa?"
+                      value={form.displaysImpulsoProximo}
+                      onChange={(v) => set('displaysImpulsoProximo', v)}
+                    />
+                  </>
+                )}
+
+                <OpcoesChips
+                  pergunta="Espaço disponível"
+                  opcoes={ESPACO_DISPONIVEL}
+                  value={form.espacoDisponivel}
+                  onChange={(v) => set('espacoDisponivel', v)}
+                  colunas={3}
+                />
+                <OpcoesChips
+                  pergunta="Potencial para display"
+                  opcoes={POTENCIAL_DISPLAY}
+                  value={form.potencialDisplay}
+                  onChange={(v) => set('potencialDisplay', v)}
+                  colunas={3}
+                />
+                <div>
+                  <label className="text-xs text-slate-600 dark:text-slate-400 font-medium block mb-1.5">
+                    Descreva a oportunidade:
+                  </label>
+                  <textarea
+                    value={form.descricaoOportunidade}
+                    onChange={(e) => set('descricaoOportunidade', e.target.value)}
+                    placeholder="Ex: Bom fluxo de pessoas ao lado do caixa, balcão com espaço livre à esquerda..."
+                    rows={2}
+                    className={textareaClass}
+                  />
+                </div>
+              </ChecklistSection>
             </div>
           )}
 
-          {/* 5. Fotos Obrigatórias com Compressão */}
-          <div className="bg-white dark:bg-[#131B2B] border border-slate-200/90 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-sm">
-            <PhotoCaptureGrid
-              cnpj={selectedLoja.cnpj}
-              isInoperante={isInoperante}
-              photos={photos}
-              onPhotoUploaded={handlePhotoUploaded}
-              onPhotoReset={handlePhotoReset}
-            />
-          </div>
+          {statusEntrada && (
+            <div className="bg-white dark:bg-[#131B2B] border border-slate-200/90 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-sm">
+              <PhotoCaptureGrid
+                isInoperante={isInoperante}
+                tipos={tiposFoto}
+                photos={photos}
+                onPhotoCaptured={handlePhotoCaptured}
+                onPhotoReset={handlePhotoReset}
+              />
+            </div>
+          )}
 
-          {/* Botão de Envio (Android M3 Extended FAB / Filled Pill Button) */}
           <div className="pt-2">
             <button
               type="submit"
-              disabled={submitMutation.isPending}
+              disabled={enviando}
               className="w-full h-14 px-4 sm:px-6 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-semibold rounded-full shadow-m3-2 flex items-center justify-center gap-2.5 disabled:opacity-50 touch-manipulation transition-all"
             >
-              {submitMutation.isPending ? (
+              {enviando ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin shrink-0" />
                   <span className="truncate">Registrando Auditoria...</span>

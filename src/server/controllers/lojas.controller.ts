@@ -98,9 +98,20 @@ export async function obterLojaPorId(req: Request, res: Response) {
         }
       }
 
+      let mapaBebidas: unknown[] = [];
+      if (auditoria.mapaBebidas) {
+        try {
+          const parsed = JSON.parse(auditoria.mapaBebidas);
+          if (Array.isArray(parsed)) mapaBebidas = parsed;
+        } catch {
+          // mapa inválido: ignora
+        }
+      }
+
       parsedAuditoria = {
         ...auditoria,
-        marcasCocaPresentes: marcasCoca
+        marcasCocaPresentes: marcasCoca,
+        mapaBebidas
       };
     }
 

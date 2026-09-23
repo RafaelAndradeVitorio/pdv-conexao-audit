@@ -47,18 +47,28 @@ model Auditoria {
   existeGeladeira         Boolean?    @map("existe_geladeira")
   marcaVisualGeladeira    String?     @map("marca_visual_geladeira")
   posseGeladeira          String?     @map("posse_geladeira")
-  organizacaoGeladeira    String?     @map("organizacao_geladeira")
+  // A coluna organizacao_geladeira sempre guardou o nível de abastecimento (Cheia ... Quase vazia)
+  abastecimentoGeladeira  String?     @map("organizacao_geladeira")
+  organizacaoGeladeira    String?     @map("organizacao")
+  visibilidadeMarcas      String?     @map("visibilidade_marcas")
 
   monsterPresente         Boolean?    @map("monster_presente")
   monsterNaGeladeira      Boolean?    @map("monster_na_geladeira")
   marcasCocaPresentes     String?     @map("marcas_coca_presentes")
+  // JSON: [{ categoria, tem, marcas, concorrentes }]
+  mapaBebidas             String?     @map("mapa_bebidas") @db.Text
 
   concorrentesMisturados  Boolean?    @map("concorrentes_misturados")
   concorrentesDetalhes    String?     @map("concorrentes_detalhes")
 
   espacoLivreCaixa        Boolean?    @map("espaco_livre_caixa")
   espacoLadoTamanho       String?     @map("espaco_lado_tamanho")
+  espacoDisponivel        String?     @map("espaco_disponivel")
+  produtosExpostosCaixa   String?     @map("produtos_expostos_caixa")
+  boaVisibilidadeCaixa    Boolean?    @map("boa_visibilidade_caixa")
   outrosDisplaysImpulso   Boolean?    @map("outros_displays_impulso")
+  displaysImpulsoMarcas   String?     @map("displays_impulso_marcas")
+  displaysImpulsoProximo  Boolean?    @map("displays_impulso_proximo_caixa")
   potencialDisplay        String?     @map("potencial_display")
   descricaoOportunidade   String?     @map("descricao_oportunidade")
 

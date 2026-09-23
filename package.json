@@ -17,6 +17,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:mock": "tsx scripts/seed-mock-audits.ts",
     "db:reset-loja": "tsx scripts/reset-store.ts",
+    "db:importar": "tsx scripts/importar-cadastros.ts",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",

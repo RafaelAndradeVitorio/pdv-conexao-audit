@@ -5,118 +5,174 @@ import {
   CnpjInputSchema,
   UploadFotoSchema
 } from '../../src/shared/schemas';
-import { STATUS_ENTRADA } from '../../src/shared/constants';
+import { STATUS_ENTRADA, CATEGORIAS_BEBIDA, NAO_IDENTIFICADO } from '../../src/shared/constants';
 
 describe('Zod Schemas Unit Tests (QA / SDET Suite)', () => {
   describe('AuditoriaSubmissionSchema', () => {
-    it('deve validar com sucesso uma auditoria completa de loja aberta com 6 fotos', () => {
-      const validData = {
+    const foto = (tipo: string) => ({ tipo, url: `/uploads/${tipo}.webp`, tamanhoBytes: 300000 });
+
+    const mapaCompleto = () =>
+      CATEGORIAS_BEBIDA.map((categoria) => ({
+        categoria,
+        tem: categoria !== 'Chás',
+        marcas: categoria === 'Refrigerantes' ? 'Coca-Cola, Fanta' : '',
+        concorrentes: categoria === 'Refrigerantes' ? true : categoria === 'Chás' ? null : false
+      }));
+
+    const lojaAbertaCompleta = () => ({
+      lojaId: 'loja-01',
+      pesquisadorId: 'pesq-01',
+      statusEntrada: STATUS_ENTRADA.ABERTA,
+      existeGeladeira: true,
+      marcaVisualGeladeira: 'Coca-Cola',
+      posseGeladeira: 'Coca-Cola/FEMSA',
+      monsterPresente: true,
+      monsterNaGeladeira: true,
+      mapaBebidas: mapaCompleto(),
+      marcasCocaPresentes: ['Coca-Cola', 'Fanta', 'Monster'],
+      organizacaoGeladeira: 'Organizada',
+      abastecimentoGeladeira: 'Cheia',
+      visibilidadeMarcas: 'Produtos facilmente identificáveis',
+      concorrentesMisturados: true,
+      concorrentesDetalhes: 'Pepsi na 2ª prateleira',
+      espacoLivreCaixa: true,
+      espacoLadoTamanho: 'Lado direito, 50cm',
+      boaVisibilidadeCaixa: true,
+      espacoDisponivel: 'Bom',
+      outrosDisplaysImpulso: true,
+      displaysImpulsoMarcas: 'Fini, Trident',
+      displaysImpulsoProximo: true,
+      potencialDisplay: 'Alto',
+      descricaoOportunidade: 'Ótima visibilidade junto ao caixa',
+      fotos: [
+        'foto_fachada',
+        'foto_geladeira',
+        'foto_marcas',
+        'foto_concorrentes',
+        'foto_detalhe',
+        'foto_caixa',
+        'foto_display',
+        'foto_display_aproximada'
+      ].map(foto)
+    });
+
+    const mensagens = (data: unknown) => {
+      const result = AuditoriaSubmissionSchema.safeParse(data);
+      return result.success ? [] : result.error.issues.map((i) => i.message);
+    };
+
+    it('deve validar com sucesso uma auditoria completa de loja aberta', () => {
+      expect(mensagens(lojaAbertaCompleta())).toEqual([]);
+    });
+
+    it('deve falhar se loja aberta não tiver as fotos obrigatórias', () => {
+      const msgs = mensagens({ ...lojaAbertaCompleta(), fotos: [foto('foto_fachada')] });
+      expect(msgs.some((m) => m.includes('Foto obrigatória ausente'))).toBe(true);
+    });
+
+    it('não deve aceitar checklist sem respostas (nada pode vir pré-preenchido)', () => {
+      const msgs = mensagens({
         lojaId: 'loja-01',
         pesquisadorId: 'pesq-01',
         statusEntrada: STATUS_ENTRADA.ABERTA,
-        existeGeladeira: true,
-        marcaVisualGeladeira: 'Coca-Cola',
-        posseGeladeira: 'FEMSA',
-        organizacaoGeladeira: 'Cheia',
-        monsterPresente: true,
-        monsterNaGeladeira: true,
-        marcasCocaPresentes: ['Coca-Cola', 'Fanta', 'Monster'],
-        concorrentesMisturados: false,
-        espacoLivreCaixa: true,
-        espacoLadoTamanho: 'Lado direito, 50cm',
+        existeGeladeira: null,
+        monsterPresente: null,
+        espacoLivreCaixa: null,
+        fotos: [foto('foto_fachada'), foto('foto_caixa')]
+      });
+      expect(msgs).toContain('Informe se existe geladeira de bebidas');
+      expect(msgs).toContain('Informe se existe Monster na loja');
+      expect(msgs).toContain('Informe se existe espaço livre próximo ao caixa');
+      expect(msgs.some((m) => m.includes('potencial'))).toBe(true);
+    });
+
+    it('loja aberta sem geladeira não exige fotos nem perguntas da geladeira', () => {
+      const semGeladeira = {
+        lojaId: 'loja-03',
+        pesquisadorId: 'pesq-01',
+        statusEntrada: STATUS_ENTRADA.ABERTA,
+        existeGeladeira: false,
+        monsterPresente: false,
+        espacoLivreCaixa: false,
+        espacoDisponivel: 'Insuficiente',
         outrosDisplaysImpulso: false,
-        potencialDisplay: 'Alto',
-        descricaoOportunidade: 'Ótima visibilidade junto ao caixa',
-        fotos: [
-          { tipo: 'foto_fachada', url: '/uploads/foto_fachada.webp', tamanhoBytes: 300000 },
-          { tipo: 'foto_geladeira', url: '/uploads/foto_geladeira.webp', tamanhoBytes: 350000 },
-          { tipo: 'foto_marcas', url: '/uploads/foto_marcas.webp', tamanhoBytes: 320000 },
-          { tipo: 'foto_concorrentes', url: '/uploads/foto_concorrentes.webp', tamanhoBytes: 280000 },
-          { tipo: 'foto_caixa', url: '/uploads/foto_caixa.webp', tamanhoBytes: 310000 },
-          { tipo: 'foto_display', url: '/uploads/foto_display.webp', tamanhoBytes: 290000 }
-        ]
+        potencialDisplay: 'Baixo',
+        fotos: [foto('foto_fachada'), foto('foto_caixa')]
       };
-
-      const result = AuditoriaSubmissionSchema.safeParse(validData);
-      expect(result.success).toBe(true);
+      expect(mensagens(semGeladeira)).toEqual([]);
     });
 
-    it('deve falhar se loja aberta não tiver as 6 fotos obrigatórias', () => {
-      const invalidData = {
-        lojaId: 'loja-01',
-        pesquisadorId: 'pesq-01',
-        statusEntrada: STATUS_ENTRADA.ABERTA,
-        existeGeladeira: true,
-        marcaVisualGeladeira: 'Coca-Cola',
-        posseGeladeira: 'FEMSA',
-        organizacaoGeladeira: 'Cheia',
-        monsterPresente: true,
-        monsterNaGeladeira: true,
-        marcasCocaPresentes: ['Coca-Cola'],
+    it('foto de concorrentes só é exigida quando há concorrentes misturados', () => {
+      const semConcorrentes = {
+        ...lojaAbertaCompleta(),
         concorrentesMisturados: false,
-        espacoLivreCaixa: true,
-        potencialDisplay: 'Alto',
-        fotos: [
-          { tipo: 'foto_fachada', url: '/uploads/foto_fachada.webp' }
-          // faltam 5 fotos
-        ]
+        concorrentesDetalhes: null,
+        fotos: lojaAbertaCompleta().fotos.filter((f) => f.tipo !== 'foto_concorrentes')
       };
+      expect(mensagens(semConcorrentes)).toEqual([]);
 
-      const result = AuditoriaSubmissionSchema.safeParse(invalidData);
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        const messages = result.error.issues.map(i => i.message);
-        expect(messages.some(m => m.includes('Foto obrigatória ausente'))).toBe(true);
-      }
+      const comConcorrentesSemFoto = { ...lojaAbertaCompleta(), fotos: semConcorrentes.fotos };
+      expect(mensagens(comConcorrentesSemFoto)).toContain('Foto obrigatória ausente: Concorrentes');
     });
 
-    it('deve validar com sucesso loja inoperante com justificativa e Foto 01 (Fachada)', () => {
+    it('deve exigir o mapa de bebidas completo quando existe geladeira', () => {
+      const mapa = mapaCompleto().map((m) => (m.categoria === 'Água' ? { ...m, tem: null } : m));
+      expect(mensagens({ ...lojaAbertaCompleta(), mapaBebidas: mapa })).toContain(
+        'Mapa de bebidas: informe se tem Água'
+      );
+    });
+
+    it('deve aceitar "Não foi possível identificar" na identificação e posse da geladeira', () => {
+      const data = {
+        ...lojaAbertaCompleta(),
+        marcaVisualGeladeira: NAO_IDENTIFICADO,
+        posseGeladeira: NAO_IDENTIFICADO
+      };
+      expect(mensagens(data)).toEqual([]);
+    });
+
+    it('deve validar com sucesso loja inoperante com justificativa e foto de visão geral', () => {
       const inoperanteData = {
         lojaId: 'loja-02',
         pesquisadorId: 'pesq-02',
         statusEntrada: STATUS_ENTRADA.FECHADA,
         justificativaInoperante: 'Loja com tapumes devido a reformas na estação',
-        fotos: [
-          { tipo: 'foto_fachada', url: '/uploads/foto_fachada.webp', tamanhoBytes: 300000 }
-        ]
+        fotos: [foto('foto_fachada')]
       };
+      expect(mensagens(inoperanteData)).toEqual([]);
+    });
 
-      const result = AuditoriaSubmissionSchema.safeParse(inoperanteData);
-      expect(result.success).toBe(true);
+    it('deve aceitar status "Outro" com descrição da situação', () => {
+      const outro = {
+        lojaId: 'loja-02',
+        pesquisadorId: 'pesq-02',
+        statusEntrada: STATUS_ENTRADA.OUTRO,
+        justificativaInoperante: 'Loja virou quiosque de outra marca',
+        fotos: [foto('foto_fachada')]
+      };
+      expect(mensagens(outro)).toEqual([]);
     });
 
     it('deve falhar para loja inoperante se justificativa for vazia ou curta', () => {
-      const invalidInoperante = {
+      const msgs = mensagens({
         lojaId: 'loja-02',
         pesquisadorId: 'pesq-02',
         statusEntrada: STATUS_ENTRADA.FECHADA,
-        justificativaInoperante: 'abc', // menor que 5 caracteres
-        fotos: [
-          { tipo: 'foto_fachada', url: '/uploads/foto_fachada.webp' }
-        ]
-      };
-
-      const result = AuditoriaSubmissionSchema.safeParse(invalidInoperante);
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error.issues[0].message).toContain('informe uma justificativa detalhada');
-      }
+        justificativaInoperante: 'abc',
+        fotos: [foto('foto_fachada')]
+      });
+      expect(msgs[0]).toContain('Descreva a situação da loja');
     });
 
-    it('deve falhar para loja inoperante se faltar Foto 01 Fachada', () => {
-      const invalidInoperante = {
+    it('deve falhar para loja inoperante se faltar a foto de visão geral', () => {
+      const msgs = mensagens({
         lojaId: 'loja-02',
         pesquisadorId: 'pesq-02',
         statusEntrada: STATUS_ENTRADA.FECHADA,
         justificativaInoperante: 'Quiosque desativado permanentemente',
         fotos: []
-      };
-
-      const result = AuditoriaSubmissionSchema.safeParse(invalidInoperante);
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error.issues[0].message).toContain('Foto 01 (Fachada) é obrigatória');
-      }
+      });
+      expect(msgs).toContain('Foto obrigatória ausente: Visão geral da loja');
     });
   });
 

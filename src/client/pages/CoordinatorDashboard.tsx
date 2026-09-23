@@ -12,16 +12,20 @@ import {
   RefreshCw,
   HardDrive,
   ExternalLink,
-  Eye
+  Eye,
+  LogOut
 } from 'lucide-react';
 import { REDES_PDV, STATUS_LOJA } from '../../shared/constants';
 import { AuditDetailModal } from '../components/AuditDetailModal';
+import { ResultadosLevantamento } from './ResultadosLevantamento';
+import { fetchCoord } from '../utils/coordApi';
 
-export const CoordinatorDashboard: React.FC = () => {
+export const CoordinatorDashboard: React.FC<{ onSair?: () => void }> = ({ onSair }) => {
   const [selectedStatus, setSelectedStatus] = useState<string>('TODOS');
   const [selectedRede, setSelectedRede] = useState<string>('TODAS');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedLojaId, setSelectedLojaId] = useState<string | null>(null);
+  const [aba, setAba] = useState<'acompanhamento' | 'resultados'>('acompanhamento');
 
   const { data: dashboard, refetch: refetchDash } = useDashboard();
   const { data: lojas, isLoading: isLoadingLojas, refetch: refetchLojas } = useLojas({
@@ -48,7 +52,7 @@ export const CoordinatorDashboard: React.FC = () => {
   const handleSyncDrive = async () => {
     try {
       setIsSyncingDrive(true);
-      const res = await fetch('/api/drive/sync', { method: 'POST' });
+      const res = await fetchCoord('/api/drive/sync', { method: 'POST' });
       const data = await res.json();
       alert(data.message || 'Sincronização com o Google Drive iniciada!');
       refetchDash();
@@ -131,9 +135,49 @@ export const CoordinatorDashboard: React.FC = () => {
             <span>Abrir Drive</span>
             <ExternalLink className="w-3 h-3 opacity-80 shrink-0" />
           </a>
+
+          {onSair && (
+            <button
+              type="button"
+              onClick={onSair}
+              className="h-10 sm:h-11 px-3.5 sm:px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-semibold rounded-full transition flex items-center gap-1.5 whitespace-nowrap"
+              title="Encerrar a sessão do coordenador neste aparelho"
+            >
+              <LogOut className="w-3.5 h-3.5 shrink-0" /> Sair
+            </button>
+          )}
         </div>
       </div>
 
+      {/* Abas: acompanhamento da operação x resultados do levantamento (Guia §13) */}
+      <div role="tablist" className="inline-flex p-1 bg-slate-100 dark:bg-[#0B0F19] border border-slate-200 dark:border-slate-800 rounded-full">
+        {(
+          [
+            ['acompanhamento', 'Acompanhamento'],
+            ['resultados', 'Resultados']
+          ] as const
+        ).map(([id, rotulo]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={aba === id}
+            onClick={() => setAba(id)}
+            className={`h-9 px-4 sm:px-5 rounded-full text-xs font-semibold transition ${
+              aba === id
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            {rotulo}
+          </button>
+        ))}
+      </div>
+
+      {aba === 'resultados' ? (
+        <ResultadosLevantamento onSelectLoja={setSelectedLojaId} />
+      ) : (
+      <>
       {/* 1. Barra de Progresso e Cards de Indicadores */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {/* Card Progresso Geral */}
@@ -412,6 +456,9 @@ export const CoordinatorDashboard: React.FC = () => {
           </table>
         </div>
       </div>
+
+      </>
+      )}
 
       {/* Modal de Detalhes da Auditoria com Previews Comprimidos */}
       <AuditDetailModal

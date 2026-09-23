@@ -3,14 +3,13 @@ import path from 'path';
 import { google, drive_v3 } from 'googleapis';
 import { prisma } from '../db';
 import { storageService } from '../storage/storage.service';
+import { NOME_ARQUIVO_FOTO } from '../../shared/constants';
 
 export interface DriveUploadResult {
   fileId: string;
   webViewLink: string;
 }
 
-const DEFAULT_WEBHOOK_URL =
-  'https://script.google.com/macros/s/AKfycbzEoY_fr0aHz-2dY77sn49M6033Pranfceew2Y6OXSlwewmL21m9iw8YsRrUyQd4BKy/exec';
 const DEFAULT_FOLDER_ID = '11ax5g10dzEhEql3fGS3i-uxwz6vduKvj';
 
 export interface SyncQueueItem {
@@ -39,7 +38,8 @@ export class GoogleDriveService {
    * Inicializa o cliente do Google Drive ou o Webhook do Google Apps Script
    */
   public initialize(): boolean {
-    this.webhookUrl = process.env.GOOGLE_DRIVE_WEBHOOK_URL || DEFAULT_WEBHOOK_URL;
+    // A URL do Apps Script funciona como credencial: vem só do ambiente, nunca do código
+    this.webhookUrl = process.env.GOOGLE_DRIVE_WEBHOOK_URL?.trim() || null;
     this.parentFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID || DEFAULT_FOLDER_ID;
 
     if (this.webhookUrl) {
@@ -325,21 +325,13 @@ export class GoogleDriveService {
       if (!auditoria || !auditoria.fotos.length) return;
 
       const baseDir = storageService.getBaseDir();
-      const tipoMap: Record<string, string> = {
-        foto_fachada: '01_Fachada',
-        foto_geladeira: '02_Geladeira_Fechada',
-        foto_marcas: '03_Geladeira_Aberta_Marcas',
-        foto_concorrentes: '04_Concorrentes_Detalhes',
-        foto_caixa: '05_Area_Caixa',
-        foto_display: '06_Espaco_Display'
-      };
 
       for (const foto of auditoria.fotos) {
         if (foto.driveFileId) continue; // Já sincronizada
 
         const relative = foto.url.replace(/^\/?uploads\//, '');
         const fullDiskPath = path.join(baseDir, relative);
-        const prefix = tipoMap[foto.tipo] || foto.tipo;
+        const prefix = NOME_ARQUIVO_FOTO[foto.tipo] || foto.tipo;
         const fileName = `${prefix}.webp`;
 
         this.enqueuePhotoUpload(
@@ -424,19 +416,10 @@ export class GoogleDriveService {
     const baseDir = storageService.getBaseDir();
     let count = 0;
 
-    const tipoMap: Record<string, string> = {
-      foto_fachada: '01_Fachada',
-      foto_geladeira: '02_Geladeira_Fechada',
-      foto_marcas: '03_Geladeira_Aberta_Marcas',
-      foto_concorrentes: '04_Concorrentes_Detalhes',
-      foto_caixa: '05_Area_Caixa',
-      foto_display: '06_Espaco_Display'
-    };
-
     for (const foto of fotosPendentes) {
       const relative = foto.url.replace(/^\/?uploads\//, '');
       const fullDiskPath = path.join(baseDir, relative);
-      const prefix = tipoMap[foto.tipo] || foto.tipo;
+      const prefix = NOME_ARQUIVO_FOTO[foto.tipo] || foto.tipo;
       const fileName = `${prefix}.webp`;
 
       this.enqueuePhotoUpload(

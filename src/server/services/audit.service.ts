@@ -4,19 +4,39 @@ import { AuditoriaSubmissionInput } from '../../shared/schemas';
 import { STATUS_LOJA, STATUS_ENTRADA } from '../../shared/constants';
 import { ResumoDashboard } from '../../shared/types';
 import { googleDriveService } from './googleDrive.service';
+import { consolidarResultados, LojaAuditada, ResultadosLevantamento } from '../../shared/analytics';
+
+// Valores gravados antes do formulário seguir os nomes do guia
+const VALORES_LEGADOS: Record<string, string> = {
+  FEMSA: 'Coca-Cola/FEMSA',
+  Outro: 'Outro fornecedor',
+  Outra: 'Outra marca'
+};
+
+const lerJsonArray = <T>(raw: string | null): T[] => {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
 
 export class DuplicateAuditError extends Error {
   public statusCode = 409;
   public lojaNome: string;
   public pesquisadorNome: string;
   public auditadaEm: string;
+  public pesquisadorId: string | null;
 
-  constructor(lojaNome: string, pesquisadorNome: string, auditadaEm: string) {
+  constructor(lojaNome: string, pesquisadorNome: string, auditadaEm: string, pesquisadorId: string | null = null) {
     super(`Esta loja já foi auditada por ${pesquisadorNome} às ${auditadaEm}`);
     this.name = 'DuplicateAuditError';
     this.lojaNome = lojaNome;
     this.pesquisadorNome = pesquisadorNome;
     this.auditadaEm = auditadaEm;
+    this.pesquisadorId = pesquisadorId;
   }
 }
 
@@ -47,7 +67,7 @@ export class AuditService {
       if (loja.status !== STATUS_LOJA.PENDENTE || loja.auditoria) {
         const pesqNome = loja.auditoria?.pesquisador?.nome || 'Outro pesquisador';
         const dataFormatada = (loja.auditadaEm || loja.auditoria?.createdAt || new Date()).toLocaleString('pt-BR');
-        throw new DuplicateAuditError(loja.nome, pesqNome, dataFormatada);
+        throw new DuplicateAuditError(loja.nome, pesqNome, dataFormatada, loja.auditoria?.pesquisadorId ?? loja.pesquisadorId);
       }
 
       // 2. Determina o status final da loja
@@ -70,17 +90,25 @@ export class AuditService {
           marcaVisualGeladeira: data.marcaVisualGeladeira ?? null,
           posseGeladeira: data.posseGeladeira ?? null,
           organizacaoGeladeira: data.organizacaoGeladeira ?? null,
+          abastecimentoGeladeira: data.abastecimentoGeladeira ?? null,
+          visibilidadeMarcas: data.visibilidadeMarcas ?? null,
 
           monsterPresente: data.monsterPresente ?? null,
           monsterNaGeladeira: data.monsterNaGeladeira ?? null,
           marcasCocaPresentes: JSON.stringify(data.marcasCocaPresentes || []),
+          mapaBebidas: data.mapaBebidas?.length ? JSON.stringify(data.mapaBebidas) : null,
 
           concorrentesMisturados: data.concorrentesMisturados ?? null,
           concorrentesDetalhes: data.concorrentesDetalhes ?? null,
 
           espacoLivreCaixa: data.espacoLivreCaixa ?? null,
           espacoLadoTamanho: data.espacoLadoTamanho ?? null,
+          espacoDisponivel: data.espacoDisponivel ?? null,
+          produtosExpostosCaixa: data.produtosExpostosCaixa ?? null,
+          boaVisibilidadeCaixa: data.boaVisibilidadeCaixa ?? null,
           outrosDisplaysImpulso: data.outrosDisplaysImpulso ?? null,
+          displaysImpulsoMarcas: data.displaysImpulsoMarcas ?? null,
+          displaysImpulsoProximo: data.displaysImpulsoProximo ?? null,
           potencialDisplay: data.potencialDisplay ?? null,
           descricaoOportunidade: data.descricaoOportunidade ?? null,
 
@@ -178,6 +206,34 @@ export class AuditService {
       porRede,
       porPesquisador
     };
+  }
+
+  /**
+   * Consolida as respostas das auditorias para responder às perguntas finais do guia (§13)
+   */
+  async getResultados(): Promise<ResultadosLevantamento> {
+    const lojas = await prisma.loja.findMany({
+      include: { auditoria: true },
+      orderBy: { id: 'asc' }
+    });
+
+    const normalizadas: LojaAuditada[] = lojas.map(({ auditoria: a, ...loja }) => ({
+      id: loja.id,
+      nome: loja.nome,
+      rede: loja.rede,
+      status: loja.status,
+      auditoria: a && {
+        ...a,
+        posseGeladeira: a.posseGeladeira ? VALORES_LEGADOS[a.posseGeladeira] ?? a.posseGeladeira : null,
+        marcaVisualGeladeira: a.marcaVisualGeladeira
+          ? VALORES_LEGADOS[a.marcaVisualGeladeira] ?? a.marcaVisualGeladeira
+          : null,
+        marcasCocaPresentes: lerJsonArray<string>(a.marcasCocaPresentes),
+        mapaBebidas: lerJsonArray(a.mapaBebidas)
+      }
+    }));
+
+    return consolidarResultados(normalizadas);
   }
 }
 

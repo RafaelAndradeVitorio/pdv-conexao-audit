@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../stores/researcherStore';
-import { Wifi, WifiOff, User, BarChart3, Smartphone, Building2 } from 'lucide-react';
+import { Wifi, WifiOff, User, BarChart3, Smartphone, Building2, CloudUpload } from 'lucide-react';
+import { useFilaEnvio } from '../hooks/useFilaEnvio';
 
 export const Header: React.FC = () => {
   const { pesquisadorNome, activeTab, setActiveTab } = useAppStore();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const { itens: fila, reenviar } = useFilaEnvio();
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -51,6 +53,19 @@ export const Header: React.FC = () => {
             {isOnline ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
             <span className="hidden sm:inline">{isOnline ? 'Online' : 'Offline'}</span>
           </div>
+
+          {/* Auditorias guardadas no aparelho aguardando envio */}
+          {fila.length > 0 && (
+            <button
+              type="button"
+              onClick={() => reenviar()}
+              className="flex items-center gap-1.5 text-[11px] px-2 sm:px-2.5 py-1 rounded-full font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 shrink-0"
+              title="Auditorias salvas no aparelho aguardando envio. Toque para tentar enviar agora."
+            >
+              <CloudUpload className="w-3.5 h-3.5" />
+              <span>{fila.length}<span className="hidden sm:inline"> na fila</span></span>
+            </button>
+          )}
 
           {/* Nome do Pesquisador Ativo */}
           {pesquisadorNome && activeTab === 'researcher' && (

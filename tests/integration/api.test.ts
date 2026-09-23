@@ -2,7 +2,37 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { app } from '../../src/server/app';
 import { prisma } from '../../src/server/db';
-import { STATUS_ENTRADA } from '../../src/shared/constants';
+import { STATUS_ENTRADA, CATEGORIAS_BEBIDA, TIPOS_FOTO } from '../../src/shared/constants';
+
+/** Payload válido de loja aberta com geladeira, sem concorrentes e sem espaço no caixa */
+function payloadLojaAberta(lojaId: string, pesquisadorId: string) {
+  return {
+    lojaId,
+    pesquisadorId,
+    statusEntrada: STATUS_ENTRADA.ABERTA,
+    existeGeladeira: true,
+    marcaVisualGeladeira: 'Coca-Cola',
+    posseGeladeira: 'Coca-Cola/FEMSA',
+    monsterPresente: true,
+    monsterNaGeladeira: true,
+    mapaBebidas: CATEGORIAS_BEBIDA.map((categoria) => ({ categoria, tem: true, marcas: '', concorrentes: false })),
+    marcasCocaPresentes: ['Coca-Cola', 'Monster', 'Sprite'],
+    organizacaoGeladeira: 'Organizada',
+    abastecimentoGeladeira: 'Cheia',
+    visibilidadeMarcas: 'Produtos facilmente identificáveis',
+    concorrentesMisturados: false,
+    espacoLivreCaixa: false,
+    espacoDisponivel: 'Limitado',
+    outrosDisplaysImpulso: false,
+    potencialDisplay: 'Médio',
+    fotos: ['foto_fachada', 'foto_geladeira', 'foto_marcas', 'foto_detalhe', 'foto_caixa'].map((tipo) => ({
+      tipo,
+      url: `/uploads/${lojaId}/${tipo}.webp`,
+      tamanhoBytes: 300000
+    }))
+  };
+}
+
 
 describe('API Integration & Concurrency Tests (SDET Suite)', () => {
   beforeAll(async () => {
@@ -65,30 +95,8 @@ describe('API Integration & Concurrency Tests (SDET Suite)', () => {
 
   it('POST /api/auditorias - deve submeter auditoria completa de loja aberta', async () => {
     const auditPayload = {
-      lojaId: 'loja-10',
-      pesquisadorId: 'pesq-01',
-      statusEntrada: STATUS_ENTRADA.ABERTA,
-      existeGeladeira: true,
-      marcaVisualGeladeira: 'Coca-Cola',
-      posseGeladeira: 'FEMSA',
-      organizacaoGeladeira: 'Cheia',
-      monsterPresente: true,
-      monsterNaGeladeira: true,
-      marcasCocaPresentes: ['Coca-Cola', 'Monster', 'Sprite'],
-      concorrentesMisturados: false,
-      espacoLivreCaixa: true,
-      espacoLadoTamanho: '50cm livres ao lado da máquina',
-      outrosDisplaysImpulso: false,
-      potencialDisplay: 'Alto',
-      descricaoOportunidade: 'Espaço excelente em frente ao balcão',
-      fotos: [
-        { tipo: 'foto_fachada', url: '/uploads/loja-10/fachada.webp', tamanhoBytes: 320000 },
-        { tipo: 'foto_geladeira', url: '/uploads/loja-10/geladeira.webp', tamanhoBytes: 310000 },
-        { tipo: 'foto_marcas', url: '/uploads/loja-10/marcas.webp', tamanhoBytes: 300000 },
-        { tipo: 'foto_concorrentes', url: '/uploads/loja-10/concorrentes.webp', tamanhoBytes: 290000 },
-        { tipo: 'foto_caixa', url: '/uploads/loja-10/caixa.webp', tamanhoBytes: 330000 },
-        { tipo: 'foto_display', url: '/uploads/loja-10/display.webp', tamanhoBytes: 340000 }
-      ]
+      ...payloadLojaAberta('loja-10', 'pesq-01'),
+      descricaoOportunidade: 'Espaço excelente em frente ao balcão'
     };
 
     const res = await request(app)
@@ -110,29 +118,7 @@ describe('API Integration & Concurrency Tests (SDET Suite)', () => {
   });
 
   it('POST /api/auditorias - TRAVA ANTI-DUPLICIDADE: deve rejeitar com 409 Conflict se loja já foi auditada', async () => {
-    const duplicatePayload = {
-      lojaId: 'loja-10',
-      pesquisadorId: 'pesq-02',
-      statusEntrada: STATUS_ENTRADA.ABERTA,
-      existeGeladeira: true,
-      marcaVisualGeladeira: 'Monster',
-      posseGeladeira: 'Monster',
-      organizacaoGeladeira: 'Boa',
-      monsterPresente: true,
-      monsterNaGeladeira: true,
-      marcasCocaPresentes: ['Monster'],
-      concorrentesMisturados: false,
-      espacoLivreCaixa: true,
-      potencialDisplay: 'Médio',
-      fotos: [
-        { tipo: 'foto_fachada', url: '/uploads/loja-10/fachada.webp' },
-        { tipo: 'foto_geladeira', url: '/uploads/loja-10/geladeira.webp' },
-        { tipo: 'foto_marcas', url: '/uploads/loja-10/marcas.webp' },
-        { tipo: 'foto_concorrentes', url: '/uploads/loja-10/concorrentes.webp' },
-        { tipo: 'foto_caixa', url: '/uploads/loja-10/caixa.webp' },
-        { tipo: 'foto_display', url: '/uploads/loja-10/display.webp' }
-      ]
-    };
+    const duplicatePayload = payloadLojaAberta('loja-10', 'pesq-02');
 
     const res = await request(app)
       .post('/api/auditorias')
@@ -145,48 +131,10 @@ describe('API Integration & Concurrency Tests (SDET Suite)', () => {
   });
 
   it('RACE CONDITION CONCURRENCY: requisição simultânea de 2 pesquisadores no mesmo milissegundo deve aceitar exatamente 1 (201) e rejeitar o concorrente com 409', async () => {
-    const fotos = [
-      { tipo: 'foto_fachada', url: '/uploads/loja-12/fachada.webp', tamanhoBytes: 300000 },
-      { tipo: 'foto_geladeira', url: '/uploads/loja-12/geladeira.webp', tamanhoBytes: 300000 },
-      { tipo: 'foto_marcas', url: '/uploads/loja-12/marcas.webp', tamanhoBytes: 300000 },
-      { tipo: 'foto_concorrentes', url: '/uploads/loja-12/concorrentes.webp', tamanhoBytes: 300000 },
-      { tipo: 'foto_caixa', url: '/uploads/loja-12/caixa.webp', tamanhoBytes: 300000 },
-      { tipo: 'foto_display', url: '/uploads/loja-12/display.webp', tamanhoBytes: 300000 }
-    ];
 
-    const payloadPesq1 = {
-      lojaId: 'loja-12',
-      pesquisadorId: 'pesq-04',
-      statusEntrada: STATUS_ENTRADA.ABERTA,
-      existeGeladeira: true,
-      marcaVisualGeladeira: 'Coca-Cola',
-      posseGeladeira: 'FEMSA',
-      organizacaoGeladeira: 'Cheia',
-      monsterPresente: true,
-      monsterNaGeladeira: true,
-      marcasCocaPresentes: ['Coca-Cola', 'Monster'],
-      concorrentesMisturados: false,
-      espacoLivreCaixa: true,
-      potencialDisplay: 'Alto',
-      fotos
-    };
+    const payloadPesq1 = payloadLojaAberta('loja-12', 'pesq-04');
 
-    const payloadPesq2 = {
-      lojaId: 'loja-12',
-      pesquisadorId: 'pesq-05',
-      statusEntrada: STATUS_ENTRADA.ABERTA,
-      existeGeladeira: true,
-      marcaVisualGeladeira: 'Monster',
-      posseGeladeira: 'Monster',
-      organizacaoGeladeira: 'Boa',
-      monsterPresente: true,
-      monsterNaGeladeira: true,
-      marcasCocaPresentes: ['Monster'],
-      concorrentesMisturados: false,
-      espacoLivreCaixa: true,
-      potencialDisplay: 'Médio',
-      fotos
-    };
+    const payloadPesq2 = payloadLojaAberta('loja-12', 'pesq-05');
 
     // Disparo estritamente simultâneo via Promise.all
     const [res1, res2] = await Promise.all([
@@ -231,17 +179,28 @@ describe('API Integration & Concurrency Tests (SDET Suite)', () => {
     expect(res.body.totalLojas).toBe(57);
   });
 
+  it('GET /api/auditorias/resultados - deve consolidar as respostas das perguntas finais do guia', async () => {
+    const res = await request(app).get('/api/auditorias/resultados');
+    expect(res.status).toBe(200);
+    expect(res.body.totalLojas).toBe(57);
+    expect(res.body.lojasAbertas).toBeGreaterThan(0);
+    expect(res.body.geladeiras.porPosse.map((p: any) => p.rotulo)).toContain('Coca-Cola/FEMSA');
+    expect(res.body.marcas.categorias).toHaveLength(6);
+    expect(Array.isArray(res.body.ranking)).toBe(true);
+    expect(Array.isArray(res.body.display)).toBe(true);
+  });
+
   it('GET /api/export/csv - deve gerar CSV com colunas formatadas e links clicáveis de mídia', async () => {
     const res = await request(app).get('/api/export/csv');
     expect(res.status).toBe(200);
     expect(res.header['content-type']).toContain('text/csv');
     expect(res.text).toContain('"ID Loja";"Rede";"Nome da Loja"');
-    expect(res.text).toContain('Foto 01 - Fachada da Loja (URL)');
-    expect(res.text).toContain('Foto 02 - Geladeira Fechada (URL)');
-    expect(res.text).toContain('Foto 03 - Geladeira Aberta - Marcas (URL)');
-    expect(res.text).toContain('Foto 04 - Concorrentes - Detalhes (URL)');
-    expect(res.text).toContain('Foto 05 - Área do Caixa (URL)');
-    expect(res.text).toContain('Foto 06 - Espaço do Display - Oportunidade (URL)');
+    for (const t of TIPOS_FOTO) {
+      expect(res.text).toContain(`Foto ${t.arquivo} (URL)`);
+    }
+    expect(res.text).toContain('Refrigerantes - Tem?');
+    expect(res.text).toContain('Visibilidade das Marcas');
+    expect(res.text).toContain('Espaço Disponível');
   });
 
   it('GET /api/export/zip - deve iniciar streaming de arquivo ZIP estruturado com nomes das lojas', async () => {

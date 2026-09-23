@@ -41,6 +41,15 @@ function gerarCnpj(indice: number): { raw: string; formatado: string } {
  * sem apagar dados pré-existentes.
  */
 export async function bootstrapDatabase(): Promise<void> {
+  // Em produção o cadastro real vem de `npm run db:importar`; dados fictícios só se pedido explicitamente
+  if (process.env.NODE_ENV === 'production' && process.env.BOOTSTRAP_DADOS_FICTICIOS !== 'true') {
+    const [lojas, pesquisadores] = await Promise.all([prisma.loja.count(), prisma.pesquisador.count()]).catch(() => [1, 1]);
+    if (lojas === 0 || pesquisadores === 0) {
+      console.warn('[Bootstrap] Banco sem lojas ou promotores. Importe o cadastro real com: npm run db:importar');
+    }
+    return;
+  }
+
   try {
     const totalPesquisadores = await prisma.pesquisador.count();
     if (totalPesquisadores === 0) {

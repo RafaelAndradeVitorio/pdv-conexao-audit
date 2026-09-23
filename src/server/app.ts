@@ -8,6 +8,9 @@ import { prisma } from './db';
 
 export const app = express();
 
+// Atrás do proxy do Railway: req.ip e req.secure passam a refletir o cliente real
+app.set('trust proxy', 1);
+
 // Middlewares
 app.use(cors());
 app.use(express.json({ limit: '25mb' }));

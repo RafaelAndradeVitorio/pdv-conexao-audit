@@ -1,6 +1,5 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { compressAuditPhoto } from '../utils/compression';
-import { useUploadFoto } from '../hooks/useAuditData';
 import { Camera, RefreshCw, CheckCircle, Loader2, Sparkles, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { TIPOS_FOTO } from '../../shared/constants';
 
@@ -16,49 +15,43 @@ export interface PhotoState {
 }
 
 interface Props {
-  cnpj: string;
   isInoperante: boolean;
+  /** Tipos de foto exigidos pelas respostas atuais (ver fotosObrigatorias) */
+  tipos: readonly string[];
   photos: Record<string, PhotoState>;
-  onPhotoUploaded: (tipo: string, data: { url: string; size: number; previewUrl: string }) => void;
+  /** Foto comprimida e guardada no aparelho; o envio ao servidor é feito pela fila de envio */
+  onPhotoCaptured: (tipo: string, data: { size: number; previewUrl: string }) => void;
   onPhotoReset: (tipo: string) => void;
 }
 
 export const PhotoCaptureGrid: React.FC<Props> = ({
-  cnpj,
   isInoperante,
+  tipos,
   photos,
-  onPhotoUploaded,
+  onPhotoCaptured,
   onPhotoReset
 }) => {
-  const uploadMutation = useUploadFoto();
+  const [comprimindo, setComprimindo] = useState<string | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  const listToRender = isInoperante
-    ? TIPOS_FOTO.filter((f) => f.obrigatoriaInoperante)
-    : TIPOS_FOTO;
+  const listToRender = TIPOS_FOTO.filter((f) => tipos.includes(f.id));
 
   const handleFileChange = async (tipo: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     try {
+      setComprimindo(tipo);
       const compressionResult = await compressAuditPhoto(file);
-
-      const uploadRes = await uploadMutation.mutateAsync({
-        cnpj,
-        tipo,
-        base64: compressionResult.base64
-      });
-
-      onPhotoUploaded(tipo, {
-        url: uploadRes.url,
-        size: uploadRes.tamanhoBytes,
+      onPhotoCaptured(tipo, {
+        size: compressionResult.compressedSizeKb * 1024,
         previewUrl: compressionResult.base64
       });
     } catch (err: any) {
       console.error('Falha no processamento da foto:', err);
-      alert(`Erro no upload da foto: ${err.message || 'Tente novamente'}`);
+      alert(`Erro ao processar a foto: ${err.message || 'Tente novamente'}`);
     } finally {
+      setComprimindo(null);
       if (fileInputRefs.current[tipo]) {
         fileInputRefs.current[tipo]!.value = '';
       }
@@ -72,18 +65,23 @@ export const PhotoCaptureGrid: React.FC<Props> = ({
           <div className="h-7 w-7 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
             <Camera className="w-4 h-4" />
           </div>
-          <span className="leading-tight">{isInoperante ? 'Registro Fotográfico (Fachada Obrigatória)' : 'Fotos Obrigatórias da Auditoria (Mínimo 6)'}</span>
+          <span className="leading-tight">{isInoperante ? 'Registro Fotográfico (Fachada Obrigatória)' : `Fotos Obrigatórias (${listToRender.length})`}</span>
         </label>
         <span className="text-[11px] text-blue-700 dark:text-blue-300 flex items-center gap-1 font-semibold bg-blue-50 dark:bg-blue-950/40 px-2.5 py-0.5 rounded-full border border-blue-200/60 dark:border-blue-800/40 shrink-0">
           <Sparkles className="w-3 h-3 text-blue-600 dark:text-blue-400" /> Compressão WebP Ativa
         </span>
       </div>
 
+      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+        Priorize equipamentos, produtos e espaços. Não fotografe clientes de forma identificável.
+        {!isInoperante && ' As fotos de geladeira, concorrentes e espaço do display aparecem conforme as respostas acima.'}
+      </p>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
         {listToRender.map((tipoObj, index) => {
           const photoState = photos[tipoObj.id];
           const hasPhoto = !!photoState?.url || !!photoState?.previewUrl;
-          const isUploading = uploadMutation.isPending && uploadMutation.variables?.tipo === tipoObj.id;
+          const isUploading = comprimindo === tipoObj.id;
 
           return (
             // Android M3 Outlined Card
@@ -101,12 +99,14 @@ export const PhotoCaptureGrid: React.FC<Props> = ({
                   <span className="h-5 w-5 rounded-full bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-[11px] font-mono flex items-center justify-center font-bold shrink-0">
                     {index + 1}
                   </span>
-                  <span className="truncate">{tipoObj.label.replace(/^Foto \d+: /, '')}</span>
+                  <span className="truncate">{tipoObj.label}</span>
                 </span>
                 {hasPhoto && !isUploading && (
                   <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 )}
               </div>
+
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug mb-2.5 -mt-1">{tipoObj.dica}</p>
 
               {/* Área de Visualização com cantos arredondados M3 */}
               <div className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-slate-100 dark:bg-[#0B0F19] border border-slate-200 dark:border-slate-800 flex items-center justify-center">
@@ -120,7 +120,7 @@ export const PhotoCaptureGrid: React.FC<Props> = ({
                     {isUploading && (
                       <div className="absolute inset-0 bg-slate-950/75 backdrop-blur-xs flex flex-col items-center justify-center p-2 text-center text-xs text-white">
                         <Loader2 className="w-6 h-6 animate-spin text-blue-400 mb-1.5" />
-                        <span className="font-medium">Enviando foto compactada...</span>
+                        <span className="font-medium">Comprimindo foto...</span>
                       </div>
                     )}
                   </>

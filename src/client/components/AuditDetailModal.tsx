@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLoja } from '../hooks/useAuditData';
+import { fetchCoord } from '../utils/coordApi';
 import {
   X,
   Building2,
@@ -27,6 +28,8 @@ interface AuditDetailModalProps {
   onClose: () => void;
 }
 
+const simNao = (v: boolean | null | undefined) => (v === true ? 'Sim' : v === false ? 'Não' : '—');
+
 export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onClose }) => {
   const queryClient = useQueryClient();
   const { data: loja, isLoading, error } = useLoja(lojaId);
@@ -43,7 +46,7 @@ export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onCl
 
     try {
       setIsResetting(true);
-      const res = await fetch(`/api/lojas/${lojaId}/reset`, { method: 'POST' });
+      const res = await fetchCoord(`/api/lojas/${lojaId}/reset`, { method: 'POST' });
       if (!res.ok) throw new Error('Falha ao resetar auditoria da loja');
       await queryClient.invalidateQueries({ queryKey: ['lojas'] });
       await queryClient.invalidateQueries({ queryKey: ['loja', lojaId] });
@@ -75,6 +78,8 @@ export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onCl
   if (!lojaId) return null;
 
   const auditoria = loja?.auditoria;
+  const marcasCoca = Array.isArray(auditoria?.marcasCocaPresentes) ? auditoria.marcasCocaPresentes : [];
+  const mapaBebidas = Array.isArray(auditoria?.mapaBebidas) ? auditoria.mapaBebidas : [];
   const isOperante = loja?.status === STATUS_LOJA.CONCLUIDA;
 
   return (
@@ -202,35 +207,71 @@ export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onCl
                       <span>1. Geladeiras & Merchandising</span>
                     </h4>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5 text-xs">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-2.5 text-xs">
                       <div className="bg-slate-50 dark:bg-[#0B0F19]/40 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
                         <div className="text-[11px] text-slate-500">Possui Geladeira?</div>
-                        <div className="font-bold text-slate-900 dark:text-slate-100 mt-0.5">
-                          {auditoria?.existeGeladeira ? 'Sim' : 'Não'}
+                        <div className="font-bold text-slate-900 dark:text-slate-100 mt-0.5 break-words">
+                          {simNao(auditoria?.existeGeladeira)}
                         </div>
                       </div>
-
                       <div className="bg-slate-50 dark:bg-[#0B0F19]/40 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
-                        <div className="text-[11px] text-slate-500">Marca Visual</div>
-                        <div className="font-bold text-slate-900 dark:text-slate-100 mt-0.5">
+                        <div className="text-[11px] text-slate-500">Identificação Visual</div>
+                        <div className="font-bold text-slate-900 dark:text-slate-100 mt-0.5 break-words">
                           {auditoria?.marcaVisualGeladeira || '—'}
                         </div>
                       </div>
-
                       <div className="bg-slate-50 dark:bg-[#0B0F19]/40 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
-                        <div className="text-[11px] text-slate-500">Posse Aparente</div>
-                        <div className="font-bold text-slate-900 dark:text-slate-100 mt-0.5">
+                        <div className="text-[11px] text-slate-500">Aparenta Pertencer a</div>
+                        <div className="font-bold text-slate-900 dark:text-slate-100 mt-0.5 break-words">
                           {auditoria?.posseGeladeira || '—'}
                         </div>
                       </div>
-
                       <div className="bg-slate-50 dark:bg-[#0B0F19]/40 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
-                        <div className="text-[11px] text-slate-500">Abastecimento</div>
-                        <div className="font-bold text-slate-900 dark:text-slate-100 mt-0.5">
+                        <div className="text-[11px] text-slate-500">Organização</div>
+                        <div className="font-bold text-slate-900 dark:text-slate-100 mt-0.5 break-words">
                           {auditoria?.organizacaoGeladeira || '—'}
                         </div>
                       </div>
+                      <div className="bg-slate-50 dark:bg-[#0B0F19]/40 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
+                        <div className="text-[11px] text-slate-500">Abastecimento</div>
+                        <div className="font-bold text-slate-900 dark:text-slate-100 mt-0.5 break-words">
+                          {auditoria?.abastecimentoGeladeira || '—'}
+                        </div>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-[#0B0F19]/40 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
+                        <div className="text-[11px] text-slate-500">Visibilidade das Marcas</div>
+                        <div className="font-bold text-slate-900 dark:text-slate-100 mt-0.5 break-words">
+                          {auditoria?.visibilidadeMarcas || '—'}
+                        </div>
+                      </div>
                     </div>
+
+                    {/* Mapa de bebidas (Guia §6) */}
+                    {mapaBebidas.length > 0 && (
+                      <div className="bg-slate-50 dark:bg-[#0B0F19]/40 p-3.5 rounded-xl border border-slate-200/60 dark:border-slate-800 text-xs overflow-x-auto">
+                        <div className="text-[11px] font-bold uppercase text-slate-500 mb-2">Mapa de Bebidas da Geladeira</div>
+                        <table className="w-full text-left">
+                          <thead>
+                            <tr className="text-[11px] text-slate-500">
+                              <th className="py-1 pr-2 font-semibold">Categoria</th>
+                              <th className="py-1 pr-2 font-semibold">Tem?</th>
+                              <th className="py-1 pr-2 font-semibold">Principais marcas</th>
+                              <th className="py-1 font-semibold">Concorrentes?</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {mapaBebidas.map((item) => (
+                              <tr key={item.categoria} className="border-t border-slate-200/60 dark:border-slate-800 text-slate-800 dark:text-slate-200">
+                                <td className="py-1.5 pr-2 font-semibold">{item.categoria}</td>
+                                <td className="py-1.5 pr-2">{simNao(item.tem)}</td>
+                                <td className="py-1.5 pr-2 break-words">{item.marcas || '—'}</td>
+                                <td className="py-1.5">{item.tem ? simNao(item.concorrentes) : '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
 
                     {/* Presença de Marcas e Concorrentes */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
@@ -238,11 +279,11 @@ export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onCl
                         <div className="font-bold text-slate-800 dark:text-slate-200 flex items-center justify-between">
                           <span>Presença Monster</span>
                           <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
-                            {auditoria?.monsterPresente ? 'Presente na Loja' : 'Ausente'}
+                            {auditoria?.monsterPresente === true ? 'Presente na Loja' : auditoria?.monsterPresente === false ? 'Ausente' : '—'}
                           </span>
                         </div>
                         <div className="text-[11px] text-slate-600 dark:text-slate-400">
-                          Na geladeira: <strong className="text-slate-900 dark:text-slate-100">{auditoria?.monsterNaGeladeira ? 'Sim' : 'Não'}</strong>
+                          Na geladeira: <strong className="text-slate-900 dark:text-slate-100">{simNao(auditoria?.monsterNaGeladeira)}</strong>
                         </div>
                       </div>
 
@@ -262,11 +303,11 @@ export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onCl
                     </div>
 
                     {/* Marcas Coca-Cola Presentes */}
-                    {auditoria?.marcasCocaPresentes && auditoria.marcasCocaPresentes.length > 0 && (
+                    {marcasCoca.length > 0 && (
                       <div className="bg-slate-50 dark:bg-[#0B0F19]/40 p-3.5 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-2 text-xs">
                         <div className="text-[11px] font-bold uppercase text-slate-500">Marcas Coca-Cola Encontradas</div>
                         <div className="flex flex-wrap gap-1.5">
-                          {auditoria.marcasCocaPresentes.map((m: string) => (
+                          {marcasCoca.map((m: string) => (
                             <span
                               key={m}
                               className="px-2.5 py-0.5 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-900/40 rounded-full font-medium text-[11px]"
@@ -283,11 +324,11 @@ export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onCl
                       <span>2. Balcão do Caixa & Display de Impulso</span>
                     </h4>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
                       <div className="bg-slate-50 dark:bg-[#0B0F19]/40 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
                         <div className="text-[11px] text-slate-500">Espaço Livre no Caixa?</div>
                         <div className="font-bold text-slate-900 dark:text-slate-100 mt-0.5">
-                          {auditoria?.espacoLivreCaixa ? 'Sim' : 'Não'}
+                          {simNao(auditoria?.espacoLivreCaixa)}
                         </div>
                         {auditoria?.espacoLadoTamanho && (
                           <div className="text-[11px] text-slate-500 mt-1 font-mono break-words">
@@ -297,10 +338,34 @@ export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onCl
                       </div>
 
                       <div className="bg-slate-50 dark:bg-[#0B0F19]/40 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
-                        <div className="text-[11px] text-slate-500">Outros Displays Presentes?</div>
-                        <div className="font-bold text-slate-900 dark:text-slate-100 mt-0.5">
-                          {auditoria?.outrosDisplaysImpulso ? 'Sim' : 'Não'}
+                        <div className="text-[11px] text-slate-500">Espaço Disponível</div>
+                        <div className="font-bold text-slate-900 dark:text-slate-100 mt-0.5 break-words">
+                          {auditoria?.espacoDisponivel || '—'}
                         </div>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-[#0B0F19]/40 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
+                        <div className="text-[11px] text-slate-500">Boa Visibilidade?</div>
+                        <div className="font-bold text-slate-900 dark:text-slate-100 mt-0.5 break-words">
+                          {simNao(auditoria?.boaVisibilidadeCaixa)}
+                        </div>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-[#0B0F19]/40 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
+                        <div className="text-[11px] text-slate-500">Produtos Expostos no Caixa</div>
+                        <div className="font-bold text-slate-900 dark:text-slate-100 mt-0.5 break-words">
+                          {auditoria?.produtosExpostosCaixa || '—'}
+                        </div>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-[#0B0F19]/40 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
+                        <div className="text-[11px] text-slate-500">Balas / Gomas / Doces?</div>
+                        <div className="font-bold text-slate-900 dark:text-slate-100 mt-0.5">
+                          {simNao(auditoria?.outrosDisplaysImpulso)}
+                          {auditoria?.displaysImpulsoProximo !== null && auditoria?.displaysImpulsoProximo !== undefined && (
+                            <span className="font-normal text-slate-500"> · {auditoria.displaysImpulsoProximo ? 'próximo ao caixa' : 'longe do caixa'}</span>
+                          )}
+                        </div>
+                        {auditoria?.displaysImpulsoMarcas && (
+                          <div className="text-[11px] text-slate-500 mt-1 break-words">{auditoria.displaysImpulsoMarcas}</div>
+                        )}
                       </div>
 
                       <div className="bg-slate-50 dark:bg-[#0B0F19]/40 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">

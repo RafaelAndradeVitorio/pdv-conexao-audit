@@ -40,12 +40,31 @@ test.describe('PWA Auditoria PDV - E2E Tests', () => {
     // Valida títulos e métricas do dashboard
     await expect(page.locator('text=Painel do Coordenador de Campo')).toBeVisible();
     await expect(page.locator('text=Progresso Geral da Operação')).toBeVisible();
-    await expect(page.locator('text=Exportar Relatório Excel/CSV')).toBeVisible();
-    await expect(page.locator('text=Download ZIP de Fotos')).toBeVisible();
+    await expect(page.locator('text=Relatório CSV')).toBeVisible();
+    await expect(page.locator('text=ZIP Fotos')).toBeVisible();
 
     // Valida tabela de lojas
     await expect(page.locator('th:has-text("Loja / Estação")')).toBeVisible();
     await expect(page.locator('th:has-text("Rede")')).toBeVisible();
     await expect(page.locator('th:has-text("CNPJ")')).toBeVisible();
+  });
+
+  test('deve exibir a aba Resultados respondendo às perguntas finais do guia', async ({ page }) => {
+    await page.goto('/');
+    await page.locator('button', { hasText: 'Coordenador' }).click();
+    await page.getByRole('tab', { name: 'Resultados' }).click();
+
+    for (const pergunta of [
+      'Como estão as geladeiras?',
+      'Quais marcas estão presentes?',
+      'Existem produtos concorrentes dentro das geladeiras FEMSA?',
+      'Onde Monster está presente e como está exposta?',
+      'Quais lojas apresentam melhor exposição?',
+      'Quais lojas apresentam oportunidades de melhoria?',
+      'Quais lojas possuem espaço para o Display'
+    ]) {
+      await expect(page.getByText(pergunta)).toBeVisible();
+    }
+    await expect(page.getByText('Nota provisória, a validar com o cliente.')).toBeVisible();
   });
 });

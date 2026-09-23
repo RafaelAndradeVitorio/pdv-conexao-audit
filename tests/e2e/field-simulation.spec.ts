@@ -1,4 +1,5 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Locator, Page } from '@playwright/test';
+import { CATEGORIAS_BEBIDA } from '../../src/shared/constants';
 import { prisma } from '../../src/server/db';
 
 const TEST_IMAGE_BUFFER = Buffer.from(
@@ -58,25 +59,51 @@ test.describe('E2E Mobile - Simulação de Campo (QA / SDET Suite)', () => {
     // Valida loja liberada
     await expect(page.locator('text=Loja liberada para auditoria de campo')).toBeVisible();
 
-    // 3. Marca loja aberta e preenche checklist
-    await expect(page.locator('text=Status de Entrada no PDV')).toBeVisible();
+    // 3. Marca loja aberta e responde o checklist (nada vem pré-preenchido)
+    await expect(page.locator('text=Registro Inicial')).toBeVisible();
     await page.locator('button:has-text("Loja aberta e operando")').click();
 
-    // Checklist Geladeira
-    await expect(page.locator('text=Geladeira de Bebidas')).toBeVisible();
+    const escolher = (pergunta: string, opcao: string, escopo: Locator | Page = page) =>
+      escopo.locator(`[data-pergunta="${pergunta}"]`).getByRole('button', { name: opcao, exact: true }).click();
 
-    // Checklist Monster & Marcas
-    await expect(page.locator('text=Presença Monster & Coca-Cola')).toBeVisible();
+    // Enviar sem responder deve listar o que falta
+    await page.locator('button:has-text("Finalizar Auditoria")').click();
+    await expect(page.locator('text=Informe se existe geladeira de bebidas')).toBeVisible();
+
+    // §4 Geladeira
+    await escolher('Existe geladeira de bebidas?', 'Sim');
+    await escolher('A geladeira possui identificação visual de alguma marca?', 'Coca-Cola');
+    await escolher('A geladeira aparenta pertencer a:', 'Coca-Cola/FEMSA');
+
+    // §5 Monster
+    await escolher('Existe Monster na loja?', 'Sim');
+    await escolher('Existe Monster dentro de alguma geladeira?', 'Sim');
+
+    // §6 Mapa de bebidas
+    for (const categoria of CATEGORIAS_BEBIDA) {
+      const card = page.locator(`[data-categoria="${categoria}"]`);
+      await escolher(categoria, 'Sim', card);
+      await escolher('Tem concorrentes?', 'Não', card);
+    }
     await page.locator('button:has-text("Fanta")').click();
     await page.locator('button:has-text("Sprite")').click();
 
-    // Área do Caixa
-    await expect(page.locator('text=Área do Caixa & Display "Coca-Cola Vai Até Você"')).toBeVisible();
+    // §7 Organização e exposição
+    await escolher('Organização', 'Organizada');
+    await escolher('Abastecimento', 'Cheia');
+    await escolher('Visibilidade das marcas', 'Produtos facilmente identificáveis');
+    await escolher('Produtos concorrentes misturados?', 'Não');
 
-    // 4. Upload das 6 fotos obrigatórias
+    // §9 Caixa e entorno
+    await escolher('Existe espaço livre próximo ao caixa?', 'Não');
+    await escolher('Existem displays de balas, gomas ou doces?', 'Não');
+    await escolher('Espaço disponível', 'Limitado');
+    await escolher('Potencial para display', 'Baixo');
+
+    // 4. Fotos exigidas pelas respostas: visão geral, geladeira, bebidas, detalhe e caixa
     const fileInputs = page.locator('input[type="file"]');
     const totalFotos = await fileInputs.count();
-    expect(totalFotos).toBe(6);
+    expect(totalFotos).toBe(5);
 
     for (let i = 0; i < totalFotos; i++) {
       await fileInputs.nth(i).setInputFiles({
@@ -145,14 +172,14 @@ test.describe('E2E Mobile - Simulação de Campo (QA / SDET Suite)', () => {
 
     // Valida que seções de geladeira e bebidas ficam OCULTAS
     await expect(page.locator('text=Geladeira de Bebidas')).not.toBeVisible();
-    await expect(page.locator('text=Presença Monster & Coca-Cola')).not.toBeVisible();
+    await expect(page.locator('text=Presença de Monster')).not.toBeVisible();
 
     // Exige justificativa em texto
-    const textareaJustificativa = page.locator('textarea[placeholder*="Loja fechada por grades"]');
+    const textareaJustificativa = page.locator('textarea[placeholder*="Loja fechada com grades"]');
     await expect(textareaJustificativa).toBeVisible();
     await textareaJustificativa.fill('Quiosque fechado com grades de metal devido a reformas no mezanino');
 
-    // Valida que exige apenas 1 foto (Foto 01 Fachada)
+    // Valida que exige apenas 1 foto (visão geral / fachada)
     const fileInputs = page.locator('input[type="file"]');
     expect(await fileInputs.count()).toBe(1);
 

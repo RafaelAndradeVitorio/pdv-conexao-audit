@@ -1,4 +1,5 @@
-import { RedePDV, StatusLoja, StatusEntrada, MarcaCocaCola } from './constants';
+import { RedePDV, StatusLoja, StatusEntrada } from './constants';
+import type { MapaBebidaItem } from './schemas';
 
 export interface Pesquisador {
   id: string;
@@ -46,17 +47,25 @@ export interface Auditoria {
   marcaVisualGeladeira?: string | null;
   posseGeladeira?: string | null;
   organizacaoGeladeira?: string | null;
-  
+  abastecimentoGeladeira?: string | null;
+  visibilidadeMarcas?: string | null;
+
   monsterPresente?: boolean | null;
   monsterNaGeladeira?: boolean | null;
-  marcasCocaPresentes?: string[]; // lista de marcas
-  
+  marcasCocaPresentes?: string[] | string | null; // JSON no banco
+  mapaBebidas?: MapaBebidaItem[] | string | null; // JSON no banco
+
   concorrentesMisturados?: boolean | null;
   concorrentesDetalhes?: string | null;
-  
+
   espacoLivreCaixa?: boolean | null;
   espacoLadoTamanho?: string | null;
+  espacoDisponivel?: string | null;
+  produtosExpostosCaixa?: string | null;
+  boaVisibilidadeCaixa?: boolean | null;
   outrosDisplaysImpulso?: boolean | null;
+  displaysImpulsoMarcas?: string | null;
+  displaysImpulsoProximo?: boolean | null;
   potencialDisplay?: string | null;
   descricaoOportunidade?: string | null;
 

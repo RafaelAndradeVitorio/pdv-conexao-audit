@@ -4,6 +4,20 @@ import path from 'path';
 import { Foto } from '@prisma/client';
 import { prisma } from '../db';
 import { storageService } from '../storage/storage.service';
+import { CATEGORIAS_BEBIDA, NOME_ARQUIVO_FOTO, TIPOS_FOTO } from '../../shared/constants';
+import type { MapaBebidaItem } from '../../shared/schemas';
+
+const simNao = (v: boolean | null | undefined): string =>
+  v === null || v === undefined ? '' : v ? 'Sim' : 'Não';
+
+const parseJson = <T>(raw: string | null | undefined, fallback: T): T => {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+};
 
 export class ExportService {
   /**
@@ -34,27 +48,30 @@ export class ExportService {
       'Data/Hora Auditoria',
       'Pesquisador',
       'Status de Entrada',
-      'Justificativa Inoperante',
+      'Justificativa / Situação',
       'Existe Geladeira?',
-      'Marca Visual Geladeira',
-      'Posse Geladeira',
-      'Organização/Abastecimento',
-      'Monster Presente?',
+      'Identificação Visual Geladeira',
+      'Geladeira Aparenta Pertencer a',
+      'Monster na Loja?',
       'Monster na Geladeira?',
+      ...CATEGORIAS_BEBIDA.flatMap((c) => [`${c} - Tem?`, `${c} - Principais Marcas`, `${c} - Concorrentes?`]),
       'Marcas Coca-Cola Presentes',
+      'Organização',
+      'Abastecimento',
+      'Visibilidade das Marcas',
       'Concorrentes Misturados?',
-      'Detalhes Concorrentes',
+      'Concorrentes - Marcas e Posição',
       'Espaço Livre no Caixa?',
       'Lado e Tamanho do Espaço',
-      'Outros Displays Impulso?',
+      'Produtos Expostos no Caixa',
+      'Boa Visibilidade no Caixa?',
+      'Espaço Disponível',
+      'Exposição de Balas/Gomas/Doces?',
+      'Marcas na Exposição de Impulso',
+      'Exposição Próxima ao Caixa?',
       'Potencial Display Coca-Cola Vai Até Você',
       'Descrição da Oportunidade',
-      'Foto 01 - Fachada da Loja (URL)',
-      'Foto 02 - Geladeira Fechada (URL)',
-      'Foto 03 - Geladeira Aberta - Marcas (URL)',
-      'Foto 04 - Concorrentes - Detalhes (URL)',
-      'Foto 05 - Área do Caixa (URL)',
-      'Foto 06 - Espaço do Display - Oportunidade (URL)'
+      ...TIPOS_FOTO.map((t) => `Foto ${t.arquivo} (URL)`)
     ];
 
     const escapeCsv = (val: unknown): string => {
@@ -70,23 +87,14 @@ export class ExportService {
       const pesq = a?.pesquisador?.nome || '';
       const auditadaEm = l.auditadaEm ? new Date(l.auditadaEm).toLocaleString('pt-BR') : '';
 
-      let marcasCoca = '';
-      if (a?.marcasCocaPresentes) {
-        try {
-          const parsed = JSON.parse(a.marcasCocaPresentes);
-          if (Array.isArray(parsed)) marcasCoca = parsed.join(', ');
-        } catch {
-          marcasCoca = a.marcasCocaPresentes;
-        }
-      }
+      const marcasRaw = parseJson<unknown>(a?.marcasCocaPresentes, a?.marcasCocaPresentes || '');
+      const marcasCoca = Array.isArray(marcasRaw) ? marcasRaw.join(', ') : String(marcasRaw || '');
+      const mapa = parseJson<MapaBebidaItem[]>(a?.mapaBebidas, []);
 
       const getFotoUrl = (tipo: string): string => {
-        if (!a || !a.fotos) return '';
-        const f = a.fotos.find((foto: Foto) => foto.tipo === tipo);
+        const f = a?.fotos.find((foto: Foto) => foto.tipo === tipo);
         if (!f) return '';
-        if ((f as any).driveUrl) {
-          return (f as any).driveUrl;
-        }
+        if (f.driveUrl) return f.driveUrl;
         return f.url.startsWith('http') ? f.url : `${baseUrl}${f.url}`;
       };
 
@@ -103,36 +111,43 @@ export class ExportService {
         pesq,
         a?.statusEntrada || '',
         a?.justificativaInoperante || '',
-        a?.existeGeladeira !== null && a?.existeGeladeira !== undefined ? (a.existeGeladeira ? 'Sim' : 'Não') : '',
+        simNao(a?.existeGeladeira),
         a?.marcaVisualGeladeira || '',
         a?.posseGeladeira || '',
-        a?.organizacaoGeladeira || '',
-        a?.monsterPresente !== null && a?.monsterPresente !== undefined ? (a.monsterPresente ? 'Sim' : 'Não') : '',
-        a?.monsterNaGeladeira !== null && a?.monsterNaGeladeira !== undefined ? (a.monsterNaGeladeira ? 'Sim' : 'Não') : '',
+        simNao(a?.monsterPresente),
+        simNao(a?.monsterNaGeladeira),
+        ...CATEGORIAS_BEBIDA.flatMap((c) => {
+          const item = mapa.find((m) => m.categoria === c);
+          return [simNao(item?.tem), item?.marcas || '', item?.tem ? simNao(item.concorrentes) : ''];
+        }),
         marcasCoca,
-        a?.concorrentesMisturados !== null && a?.concorrentesMisturados !== undefined ? (a.concorrentesMisturados ? 'Sim' : 'Não') : '',
+        a?.organizacaoGeladeira || '',
+        a?.abastecimentoGeladeira || '',
+        a?.visibilidadeMarcas || '',
+        simNao(a?.concorrentesMisturados),
         a?.concorrentesDetalhes || '',
-        a?.espacoLivreCaixa !== null && a?.espacoLivreCaixa !== undefined ? (a.espacoLivreCaixa ? 'Sim' : 'Não') : '',
+        simNao(a?.espacoLivreCaixa),
         a?.espacoLadoTamanho || '',
-        a?.outrosDisplaysImpulso !== null && a?.outrosDisplaysImpulso !== undefined ? (a.outrosDisplaysImpulso ? 'Sim' : 'Não') : '',
+        a?.produtosExpostosCaixa || '',
+        simNao(a?.boaVisibilidadeCaixa),
+        a?.espacoDisponivel || '',
+        simNao(a?.outrosDisplaysImpulso),
+        a?.displaysImpulsoMarcas || '',
+        simNao(a?.displaysImpulsoProximo),
         a?.potencialDisplay || '',
         a?.descricaoOportunidade || '',
-        getFotoUrl('foto_fachada'),
-        getFotoUrl('foto_geladeira'),
-        getFotoUrl('foto_marcas'),
-        getFotoUrl('foto_concorrentes'),
-        getFotoUrl('foto_caixa'),
-        getFotoUrl('foto_display')
+        ...TIPOS_FOTO.map((t) => getFotoUrl(t.id))
       ];
 
       rows.push(row.map(escapeCsv).join(';'));
     }
 
-    return '\uFEFF' + rows.join('\r\n');
+    return '﻿' + rows.join('\r\n');
   }
 
   /**
-   * Compacta todas as fotos em streaming organizadas por CNPJ da Loja
+   * Compacta todas as fotos em streaming, uma pasta por loja,
+   * com os nomes do guia (01 - Visao geral ... 06 - Espaco potencial display)
    */
   async streamPhotosZip(writableStream: NodeJS.WritableStream): Promise<void> {
     const archive = archiver('zip', {
@@ -151,25 +166,21 @@ export class ExportService {
     const baseDir = storageService.getBaseDir();
 
     for (const aud of auditorias) {
-      // Nomeia as pastas no ZIP com o nome da loja
       const nomePastaLoja = aud.loja.nome.replace(/[\\/:*?"<>|]/g, '-').trim();
 
       for (const foto of aud.fotos) {
         const relative = foto.url.replace(/^\/?uploads\//, '');
         const fullDiskPath = path.join(baseDir, relative);
+        const zipEntryName = `${nomePastaLoja}/${NOME_ARQUIVO_FOTO[foto.tipo] || foto.tipo}.webp`;
 
         if (fs.existsSync(fullDiskPath)) {
-          const zipEntryName = `${nomePastaLoja}/${path.basename(fullDiskPath)}`;
           archive.file(fullDiskPath, { name: zipEntryName });
-        } else if ((foto as any).base64) {
-          const base64Data = (foto as any).base64.replace(/^data:image\/\w+;base64,/, '');
-          const buffer = Buffer.from(base64Data, 'base64');
-          const zipEntryName = `${nomePastaLoja}/${path.basename(fullDiskPath)}`;
-          archive.append(buffer, { name: zipEntryName });
+        } else if (foto.base64) {
+          const base64Data = foto.base64.replace(/^data:image\/\w+;base64,/, '');
+          archive.append(Buffer.from(base64Data, 'base64'), { name: zipEntryName });
         } else {
-          const zipEntryName = `${nomePastaLoja}/${foto.tipo}.txt`;
           archive.append(`Foto: ${foto.tipo}\nURL: ${foto.url}\nLoja: ${aud.loja.nome}`, {
-            name: zipEntryName
+            name: zipEntryName.replace(/\.webp$/, '.txt')
           });
         }
       }

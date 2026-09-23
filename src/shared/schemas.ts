@@ -6,8 +6,13 @@ import {
   MARCA_VISUAL_GELADEIRA,
   POSSE_GELADEIRA,
   ORGANIZACAO_GELADEIRA,
+  ABASTECIMENTO_GELADEIRA,
+  VISIBILIDADE_MARCAS,
+  ESPACO_DISPONIVEL,
   POTENCIAL_DISPLAY,
-  MARCAS_COCA_COLA
+  CATEGORIAS_BEBIDA,
+  TIPOS_FOTO,
+  fotosObrigatorias
 } from './constants';
 
 export const PesquisadorSchema = z.object({
@@ -51,6 +56,19 @@ export const AuditoriaFotoInputSchema = z.object({
 
 export type AuditoriaFotoInput = z.infer<typeof AuditoriaFotoInputSchema>;
 
+export const MapaBebidaItemSchema = z.object({
+  categoria: z.enum(CATEGORIAS_BEBIDA),
+  tem: z.boolean().nullable(),
+  marcas: z.string().optional().nullable(),
+  concorrentes: z.boolean().optional().nullable()
+});
+
+export type MapaBebidaItem = z.infer<typeof MapaBebidaItemSchema>;
+
+export const JUSTIFICATIVA_MIN = 10;
+
+const nulo = (v: unknown) => v === undefined || v === null;
+
 export const AuditoriaSubmissionSchema = z.object({
   lojaId: z.string().min(1, 'Selecione uma loja válida'),
   pesquisadorId: z.string().min(1, 'Selecione o pesquisador'),
@@ -58,141 +76,120 @@ export const AuditoriaSubmissionSchema = z.object({
     STATUS_ENTRADA.ABERTA,
     STATUS_ENTRADA.FECHADA,
     STATUS_ENTRADA.REFORMA,
-    STATUS_ENTRADA.NAO_LOCALIZADA
+    STATUS_ENTRADA.NAO_LOCALIZADA,
+    STATUS_ENTRADA.OUTRO
   ]),
 
-  // Campo condicional para loja inoperante
+  // Loja fechada / em reforma / outro: descrição da situação
   justificativaInoperante: z.string().optional().nullable(),
 
-  // Campos para loja aberta
+  // §4 Geladeira
   existeGeladeira: z.boolean().optional().nullable(),
   marcaVisualGeladeira: z.enum(MARCA_VISUAL_GELADEIRA).optional().nullable(),
   posseGeladeira: z.enum(POSSE_GELADEIRA).optional().nullable(),
-  organizacaoGeladeira: z.enum(ORGANIZACAO_GELADEIRA).optional().nullable(),
 
+  // §5 Monster
   monsterPresente: z.boolean().optional().nullable(),
   monsterNaGeladeira: z.boolean().optional().nullable(),
+
+  // §6 Mapa de bebidas + marcas Coca-Cola
+  mapaBebidas: z.array(MapaBebidaItemSchema).optional().default([]),
   marcasCocaPresentes: z.array(z.string()).optional().default([]),
 
+  // §7 Organização e exposição
+  organizacaoGeladeira: z.enum(ORGANIZACAO_GELADEIRA).optional().nullable(),
+  abastecimentoGeladeira: z.enum(ABASTECIMENTO_GELADEIRA).optional().nullable(),
+  visibilidadeMarcas: z.enum(VISIBILIDADE_MARCAS).optional().nullable(),
   concorrentesMisturados: z.boolean().optional().nullable(),
   concorrentesDetalhes: z.string().optional().nullable(),
 
+  // §9 Caixa e entorno
   espacoLivreCaixa: z.boolean().optional().nullable(),
   espacoLadoTamanho: z.string().optional().nullable(),
+  espacoDisponivel: z.enum(ESPACO_DISPONIVEL).optional().nullable(),
+  produtosExpostosCaixa: z.string().optional().nullable(),
+  boaVisibilidadeCaixa: z.boolean().optional().nullable(),
   outrosDisplaysImpulso: z.boolean().optional().nullable(),
+  displaysImpulsoMarcas: z.string().optional().nullable(),
+  displaysImpulsoProximo: z.boolean().optional().nullable(),
   potencialDisplay: z.enum(POTENCIAL_DISPLAY).optional().nullable(),
   descricaoOportunidade: z.string().optional().nullable(),
 
   fotos: z.array(AuditoriaFotoInputSchema)
 }).superRefine((data, ctx) => {
+  const exigir = (condicao: boolean, path: string, message: string) => {
+    if (condicao) ctx.addIssue({ code: z.ZodIssueCode.custom, message, path: [path] });
+  };
+
   const isOperante = data.statusEntrada === STATUS_ENTRADA.ABERTA;
 
   if (!isOperante) {
-    // Loja inoperante: justificativa obrigatória e Foto 01 (Fachada) obrigatória
-    const just = data.justificativaInoperante;
-    if (!just || typeof just !== 'string' || just.trim().length < 5) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Para lojas inoperantes/fechadas, informe uma justificativa detalhada (mínimo 5 caracteres)',
-        path: ['justificativaInoperante']
-      });
-    }
-
-    const fotosList = data.fotos as AuditoriaFotoInput[];
-    const hasFachada = fotosList.some((f: AuditoriaFotoInput) => f.tipo === 'foto_fachada');
-    if (!hasFachada) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Foto 01 (Fachada) é obrigatória mesmo para lojas fechadas/inoperantes',
-        path: ['fotos']
-      });
-    }
+    const just = data.justificativaInoperante?.trim() || '';
+    exigir(
+      just.length < JUSTIFICATIVA_MIN,
+      'justificativaInoperante',
+      `Descreva a situação da loja (mínimo ${JUSTIFICATIVA_MIN} caracteres)`
+    );
   } else {
-    // Loja aberta: validações completas
-    if (data.existeGeladeira === undefined || data.existeGeladeira === null) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Informe se existe geladeira de bebidas',
-        path: ['existeGeladeira']
-      });
-    }
+    exigir(nulo(data.existeGeladeira), 'existeGeladeira', 'Informe se existe geladeira de bebidas');
 
     if (data.existeGeladeira) {
-      if (!data.marcaVisualGeladeira) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Selecione a marca visual da geladeira',
-          path: ['marcaVisualGeladeira']
-        });
+      exigir(!data.marcaVisualGeladeira, 'marcaVisualGeladeira', 'Informe a identificação visual da geladeira');
+      exigir(!data.posseGeladeira, 'posseGeladeira', 'Informe a quem a geladeira aparenta pertencer');
+      exigir(!data.organizacaoGeladeira, 'organizacaoGeladeira', 'Avalie a organização da geladeira');
+      exigir(!data.abastecimentoGeladeira, 'abastecimentoGeladeira', 'Avalie o abastecimento da geladeira');
+      exigir(!data.visibilidadeMarcas, 'visibilidadeMarcas', 'Avalie a visibilidade das marcas');
+      exigir(nulo(data.concorrentesMisturados), 'concorrentesMisturados', 'Informe se há produtos concorrentes misturados');
+      exigir(
+        data.concorrentesMisturados === true && (data.concorrentesDetalhes?.trim().length || 0) < 3,
+        'concorrentesDetalhes',
+        'Registre quais marcas concorrentes estão misturadas e onde estão'
+      );
+
+      for (const categoria of CATEGORIAS_BEBIDA) {
+        const item = data.mapaBebidas.find((m) => m.categoria === categoria);
+        if (!item || nulo(item.tem)) {
+          exigir(true, 'mapaBebidas', `Mapa de bebidas: informe se tem ${categoria}`);
+        } else if (item.tem && nulo(item.concorrentes)) {
+          exigir(true, 'mapaBebidas', `Mapa de bebidas: informe se há concorrentes em ${categoria}`);
+        }
       }
-      if (!data.posseGeladeira) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Selecione a posse aparente da geladeira',
-          path: ['posseGeladeira']
-        });
-      }
-      if (!data.organizacaoGeladeira) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Classifique a organização e abastecimento da geladeira',
-          path: ['organizacaoGeladeira']
-        });
-      }
     }
 
-    if (data.monsterPresente === undefined || data.monsterPresente === null) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Informe se Monster Energy está presente na loja',
-        path: ['monsterPresente']
-      });
-    }
+    exigir(nulo(data.monsterPresente), 'monsterPresente', 'Informe se existe Monster na loja');
+    exigir(
+      data.monsterPresente === true && data.existeGeladeira === true && nulo(data.monsterNaGeladeira),
+      'monsterNaGeladeira',
+      'Informe se existe Monster dentro de alguma geladeira'
+    );
 
-    if (data.concorrentesMisturados === undefined || data.concorrentesMisturados === null) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Informe se há concorrentes na geladeira',
-        path: ['concorrentesMisturados']
-      });
-    }
+    exigir(nulo(data.espacoLivreCaixa), 'espacoLivreCaixa', 'Informe se existe espaço livre próximo ao caixa');
+    exigir(
+      data.espacoLivreCaixa === true && nulo(data.boaVisibilidadeCaixa),
+      'boaVisibilidadeCaixa',
+      'Informe se o espaço tem boa visibilidade para o consumidor'
+    );
+    exigir(!data.espacoDisponivel, 'espacoDisponivel', 'Classifique o espaço disponível (Bom / Limitado / Insuficiente)');
+    exigir(nulo(data.outrosDisplaysImpulso), 'outrosDisplaysImpulso', 'Informe se existe exposição de balas, gomas ou doces');
+    exigir(
+      data.outrosDisplaysImpulso === true && nulo(data.displaysImpulsoProximo),
+      'displaysImpulsoProximo',
+      'Informe se a exposição de impulso está próxima ao caixa'
+    );
+    exigir(!data.potencialDisplay, 'potencialDisplay', 'Classifique o potencial para o Display Coca-Cola Vai Até Você');
+  }
 
-    if (data.espacoLivreCaixa === undefined || data.espacoLivreCaixa === null) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Informe se há espaço livre próximo ao caixa',
-        path: ['espacoLivreCaixa']
-      });
-    }
-
-    if (!data.potencialDisplay) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Classifique o potencial para o display "Coca-Cola Vai Até Você"',
-        path: ['potencialDisplay']
-      });
-    }
-
-    // 6 fotos obrigatórias para loja aberta
-    const fotosRequeridas = [
-      'foto_fachada',
-      'foto_geladeira',
-      'foto_marcas',
-      'foto_concorrentes',
-      'foto_caixa',
-      'foto_display'
-    ];
-
-    const fotosList = data.fotos as AuditoriaFotoInput[];
-    const fotosPresentes = new Set(fotosList.map((f: AuditoriaFotoInput) => f.tipo));
-    for (const req of fotosRequeridas) {
-      if (!fotosPresentes.has(req)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `Foto obrigatória ausente: ${req}`,
-          path: ['fotos']
-        });
-      }
+  const presentes = new Set(data.fotos.map((f) => f.tipo));
+  const obrigatorias = fotosObrigatorias({
+    inoperante: !isOperante,
+    existeGeladeira: data.existeGeladeira,
+    concorrentesMisturados: data.concorrentesMisturados,
+    espacoLivreCaixa: data.espacoLivreCaixa
+  });
+  for (const tipo of obrigatorias) {
+    if (!presentes.has(tipo)) {
+      const label = TIPOS_FOTO.find((t) => t.id === tipo)?.label || tipo;
+      exigir(true, 'fotos', `Foto obrigatória ausente: ${label}`);
     }
   }
 });

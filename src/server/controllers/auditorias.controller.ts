@@ -29,6 +29,7 @@ export async function submeterAuditoria(req: Request, res: Response) {
         error: error.message,
         lojaNome: error.lojaNome,
         pesquisadorNome: error.pesquisadorNome,
+        pesquisadorId: error.pesquisadorId,
         auditadaEm: error.auditadaEm
       });
     }
@@ -80,6 +81,15 @@ export async function obterDashboard(_req: Request, res: Response) {
   } catch (error: unknown) {
     console.error('Erro ao obter dados do dashboard:', error);
     return res.status(500).json({ error: 'Erro ao consolidar métricas do dashboard' });
+  }
+}
+
+export async function obterResultados(_req: Request, res: Response) {
+  try {
+    return res.json(await auditService.getResultados());
+  } catch (error: unknown) {
+    console.error('Erro ao consolidar resultados do levantamento:', error);
+    return res.status(500).json({ error: 'Erro ao consolidar resultados do levantamento' });
   }
 }
 

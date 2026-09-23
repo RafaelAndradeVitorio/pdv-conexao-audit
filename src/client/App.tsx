@@ -2,10 +2,12 @@ import React from 'react';
 import { useAppStore } from './stores/researcherStore';
 import { Header } from './components/Header';
 import { ResearcherFlow } from './pages/ResearcherFlow';
-import { CoordinatorDashboard } from './pages/CoordinatorDashboard';
+import { CoordinatorGate } from './pages/CoordinatorGate';
+import { useReenvioAutomatico } from './hooks/useFilaEnvio';
 
 export const App: React.FC = () => {
   const { activeTab } = useAppStore();
+  useReenvioAutomatico();
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col overflow-x-hidden w-full">
@@ -15,7 +17,7 @@ export const App: React.FC = () => {
         {activeTab === 'researcher' ? (
           <ResearcherFlow />
         ) : (
-          <CoordinatorDashboard />
+          <CoordinatorGate />
         )}
       </main>
 
