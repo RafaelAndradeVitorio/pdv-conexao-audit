@@ -13,7 +13,9 @@ import {
   Store,
   Eye,
   Download,
-  HardDrive
+  HardDrive,
+  Camera,
+  Image as ImageIcon
 } from 'lucide-react';
 import { STATUS_LOJA, TIPOS_FOTO } from '../../shared/constants';
 import { AuditoriaFoto } from '../../shared/types';
@@ -26,6 +28,7 @@ interface AuditDetailModalProps {
 export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onClose }) => {
   const { data: loja, isLoading, error } = useLoja(lojaId);
   const [activePhoto, setActivePhoto] = useState<AuditoriaFoto | null>(null);
+  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
 
   // Fecha o modal ao pressionar a tecla ESC
   useEffect(() => {
@@ -331,15 +334,30 @@ export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onCl
                           >
                             {/* Imagem com Preview Comprimido */}
                             <div
-                              className="relative h-44 w-full bg-slate-100 dark:bg-slate-900 cursor-pointer overflow-hidden"
+                              className="relative h-44 w-full bg-slate-100 dark:bg-slate-900 cursor-pointer overflow-hidden flex items-center justify-center"
                               onClick={() => setActivePhoto(foto)}
                             >
-                              <img
-                                src={foto.url}
-                                alt={label}
-                                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                                loading="lazy"
-                              />
+                              {failedImages[foto.id] ? (
+                                <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-slate-100 dark:bg-slate-900/90 text-slate-400 select-none text-center">
+                                  <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400 mb-2">
+                                    <Camera className="w-5 h-5" />
+                                  </div>
+                                  <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300 line-clamp-1 max-w-[90%]">
+                                    {label}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 mt-0.5">
+                                    Visualização comprimida
+                                  </span>
+                                </div>
+                              ) : (
+                                <img
+                                  src={foto.url}
+                                  alt=""
+                                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                  loading="lazy"
+                                  onError={() => setFailedImages((prev) => ({ ...prev, [foto.id]: true }))}
+                                />
+                              )}
 
                               {/* Overlay de hover com botão de ampliar */}
                               <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
@@ -358,7 +376,7 @@ export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onCl
 
                             {/* Detalhes da Foto e Ações */}
                             <div className="p-3 flex flex-col justify-between flex-1 gap-2">
-                              <div className="text-[11px] font-semibold text-slate-900 dark:text-slate-100 line-clamp-1">
+                              <div className="text-[11px] font-semibold text-slate-900 dark:text-slate-100 truncate" title={label}>
                                 {label}
                               </div>
 
@@ -429,11 +447,20 @@ export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onCl
           </button>
 
           <div className="relative max-w-4xl w-full flex flex-col items-center my-auto" onClick={(e) => e.stopPropagation()}>
-            <img
-              src={activePhoto.url}
-              alt={activePhoto.tipo}
-              className="max-h-[60vh] sm:max-h-[75vh] max-w-full rounded-2xl shadow-2xl object-contain border border-slate-700"
-            />
+            {failedImages[activePhoto.id] ? (
+              <div className="h-64 sm:h-96 w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-700 flex flex-col items-center justify-center p-6 text-center text-slate-300">
+                <Camera className="w-12 h-12 text-blue-400 mb-3" />
+                <span className="text-sm font-semibold">{TIPOS_FOTO.find((t) => t.id === activePhoto.tipo)?.label || activePhoto.tipo}</span>
+                <span className="text-xs text-slate-400 mt-1">Visualização offline / Armazenado no servidor</span>
+              </div>
+            ) : (
+              <img
+                src={activePhoto.url}
+                alt=""
+                className="max-h-[60vh] sm:max-h-[75vh] max-w-full rounded-2xl shadow-2xl object-contain border border-slate-700"
+                onError={() => setFailedImages((prev) => ({ ...prev, [activePhoto.id]: true }))}
+              />
+            )}
 
             <div className="mt-3 sm:mt-4 flex flex-wrap items-center justify-center gap-2 sm:gap-3 text-white text-xs max-w-full px-2">
               <span className="font-semibold text-center w-full sm:w-auto px-2 py-0.5">

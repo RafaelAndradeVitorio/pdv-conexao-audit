@@ -219,7 +219,8 @@ export const CoordinatorDashboard: React.FC = () => {
       <div className="bg-white dark:bg-[#131B2B] border border-slate-200/90 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden">
         {/* Barra de Filtros */}
         <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-[#0B0F19]/40 flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="relative flex-1 w-full md:max-w-md">
+          <div className="relative flex items-center flex-1 w-full md:max-w-md">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" />
             <input
               type="text"
               placeholder="Buscar por Loja, Estação, CNPJ ou Pesquisador..."
@@ -227,7 +228,6 @@ export const CoordinatorDashboard: React.FC = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full h-11 bg-white dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 focus:border-blue-600 rounded-full pl-10 pr-4 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 outline-none shadow-sm transition"
             />
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">

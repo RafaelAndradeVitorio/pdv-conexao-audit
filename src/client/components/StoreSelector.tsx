@@ -66,7 +66,8 @@ export const StoreSelector: React.FC<Props> = ({ selectedLoja, onSelectLoja }) =
       {/* Caixa de Busca com Autocomplete (Android M3 Search Bar - rounded-full, 56dp) */}
       {!selectedLoja ? (
         <div className="relative">
-          <div className="relative">
+          <div className="relative flex items-center">
+            <Search className="w-5 h-5 text-slate-400 dark:text-slate-500 absolute left-4 pointer-events-none" />
             <input
               type="text"
               placeholder="Digite o CNPJ, Nome da Loja ou Estação de Metrô..."
@@ -78,12 +79,11 @@ export const StoreSelector: React.FC<Props> = ({ selectedLoja, onSelectLoja }) =
               onFocus={() => setIsOpen(true)}
               className="w-full h-14 bg-slate-50/70 dark:bg-[#0B0F19] border border-slate-300 dark:border-slate-700 hover:border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 rounded-full pl-12 pr-10 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none shadow-sm transition-all touch-manipulation font-roboto"
             />
-            <Search className="w-5 h-5 text-slate-400 dark:text-slate-500 absolute left-4 top-4.5" />
             {searchTerm && (
               <button
                 type="button"
                 onClick={() => setSearchTerm('')}
-                className="absolute right-3.5 top-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-full"
+                className="absolute right-3.5 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full"
               >
                 <X className="w-4 h-4" />
               </button>
