@@ -30,6 +30,8 @@ export const CoordinatorDashboard: React.FC = () => {
     search: searchTerm
   });
 
+  const [isSyncingDrive, setIsSyncingDrive] = useState(false);
+
   const handleRefresh = () => {
     refetchDash();
     refetchLojas();
@@ -41,6 +43,21 @@ export const CoordinatorDashboard: React.FC = () => {
 
   const handleDownloadZip = () => {
     window.open('/api/export/zip', '_blank');
+  };
+
+  const handleSyncDrive = async () => {
+    try {
+      setIsSyncingDrive(true);
+      const res = await fetch('/api/drive/sync', { method: 'POST' });
+      const data = await res.json();
+      alert(data.message || 'Sincronização com o Google Drive iniciada!');
+      refetchDash();
+      refetchLojas();
+    } catch (err: any) {
+      alert(`Erro ao sincronizar com Google Drive: ${err.message || 'Falha de conexão'}`);
+    } finally {
+      setIsSyncingDrive(false);
+    }
   };
 
   const total = dashboard?.totalLojas || 57;
@@ -92,6 +109,17 @@ export const CoordinatorDashboard: React.FC = () => {
             <span><span className="hidden sm:inline">Download </span>ZIP Fotos</span>
           </button>
 
+          <button
+            type="button"
+            onClick={handleSyncDrive}
+            disabled={isSyncingDrive}
+            className="flex-1 sm:flex-initial h-10 sm:h-11 flex items-center justify-center gap-2 px-3.5 sm:px-4 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 text-xs font-semibold rounded-full shadow-sm transition touch-manipulation whitespace-nowrap disabled:opacity-50"
+            title="Sincronizar fotos pendentes com o Google Drive"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${isSyncingDrive ? 'animate-spin' : ''}`} />
+            <span>{isSyncingDrive ? 'Sincronizando...' : 'Sincronizar Drive'}</span>
+          </button>
+
           <a
             href="https://drive.google.com/drive/folders/11ax5g10dzEhEql3fGS3i-uxwz6vduKvj"
             target="_blank"
@@ -100,7 +128,7 @@ export const CoordinatorDashboard: React.FC = () => {
             title="Abrir pasta de fotos organizadas no Google Drive"
           >
             <HardDrive className="w-4 h-4 shrink-0" />
-            <span>Fotos no Drive</span>
+            <span>Abrir Drive</span>
             <ExternalLink className="w-3 h-3 opacity-80 shrink-0" />
           </a>
         </div>

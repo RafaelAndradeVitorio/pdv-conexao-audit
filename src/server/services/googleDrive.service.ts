@@ -9,11 +9,16 @@ export interface DriveUploadResult {
   webViewLink: string;
 }
 
+const DEFAULT_WEBHOOK_URL =
+  'https://script.google.com/macros/s/AKfycbzEoY_fr0aHz-2dY77sn49M6033Pranfceew2Y6OXSlwewmL21m9iw8YsRrUyQd4BKy/exec';
+const DEFAULT_FOLDER_ID = '11ax5g10dzEhEql3fGS3i-uxwz6vduKvj';
+
 export interface SyncQueueItem {
   fotoId: string;
   lojaNome: string;
   localPath: string;
   fileName: string;
+  base64?: string;
   retries: number;
 }
 
@@ -34,8 +39,8 @@ export class GoogleDriveService {
    * Inicializa o cliente do Google Drive ou o Webhook do Google Apps Script
    */
   public initialize(): boolean {
-    this.webhookUrl = process.env.GOOGLE_DRIVE_WEBHOOK_URL || null;
-    this.parentFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID || null;
+    this.webhookUrl = process.env.GOOGLE_DRIVE_WEBHOOK_URL || DEFAULT_WEBHOOK_URL;
+    this.parentFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID || DEFAULT_FOLDER_ID;
 
     if (this.webhookUrl) {
       this.isInitialized = true;
@@ -85,10 +90,18 @@ export class GoogleDriveService {
     storeName: string,
     localFilePath: string,
     fileName: string,
-    mimeType = 'image/webp'
+    mimeType = 'image/webp',
+    fallbackBase64?: string
   ): Promise<DriveUploadResult> {
-    const fileBuffer = fs.readFileSync(localFilePath);
-    const base64 = fileBuffer.toString('base64');
+    let base64 = '';
+    if (fs.existsSync(localFilePath)) {
+      const fileBuffer = fs.readFileSync(localFilePath);
+      base64 = fileBuffer.toString('base64');
+    } else if (fallbackBase64) {
+      base64 = fallbackBase64.replace(/^data:image\/\w+;base64,/, '');
+    } else {
+      throw new Error(`Arquivo não encontrado para upload no Drive: ${localFilePath}`);
+    }
 
     const payload = {
       storeName,
@@ -193,19 +206,30 @@ export class GoogleDriveService {
     storeName: string,
     localFilePath: string,
     fileName: string,
-    mimeType = 'image/webp'
+    mimeType = 'image/webp',
+    fallbackBase64?: string
   ): Promise<DriveUploadResult> {
     if (!this.isAvailable()) {
       throw new Error('Google Drive service não está configurado.');
     }
 
     if (!fs.existsSync(localFilePath)) {
-      throw new Error(`Arquivo local não encontrado: ${localFilePath}`);
+      if (fallbackBase64) {
+        try {
+          const raw = fallbackBase64.replace(/^data:image\/\w+;base64,/, '');
+          fs.mkdirSync(path.dirname(localFilePath), { recursive: true });
+          fs.writeFileSync(localFilePath, Buffer.from(raw, 'base64'));
+        } catch {
+          // segue para upload direto via webhook
+        }
+      } else {
+        throw new Error(`Arquivo local não encontrado: ${localFilePath}`);
+      }
     }
 
     // 1. Se webhook estiver configurado, usa execução direta no Gmail pessoal
     if (this.webhookUrl) {
-      const result = await this.uploadViaWebhook(storeName, localFilePath, fileName, mimeType);
+      const result = await this.uploadViaWebhook(storeName, localFilePath, fileName, mimeType, fallbackBase64);
       console.log(`[GoogleDrive Webhook] Foto "${fileName}" enviada com sucesso para "${storeName}". Link: ${result.webViewLink}`);
       return result;
     }
@@ -265,13 +289,15 @@ export class GoogleDriveService {
     fotoId: string,
     lojaNome: string,
     localFilePath: string,
-    fileName: string
+    fileName: string,
+    base64?: string
   ): void {
     this.queue.push({
       fotoId,
       lojaNome,
       localPath: localFilePath,
       fileName,
+      base64,
       retries: 0
     });
 
@@ -299,17 +325,30 @@ export class GoogleDriveService {
       if (!auditoria || !auditoria.fotos.length) return;
 
       const baseDir = storageService.getBaseDir();
+      const tipoMap: Record<string, string> = {
+        foto_fachada: '01_Fachada',
+        foto_geladeira: '02_Geladeira_Fechada',
+        foto_marcas: '03_Geladeira_Aberta_Marcas',
+        foto_concorrentes: '04_Concorrentes_Detalhes',
+        foto_caixa: '05_Area_Caixa',
+        foto_display: '06_Espaco_Display'
+      };
 
       for (const foto of auditoria.fotos) {
         if (foto.driveFileId) continue; // Já sincronizada
 
         const relative = foto.url.replace(/^\/?uploads\//, '');
         const fullDiskPath = path.join(baseDir, relative);
+        const prefix = tipoMap[foto.tipo] || foto.tipo;
+        const fileName = `${prefix}.webp`;
 
-        if (fs.existsSync(fullDiskPath)) {
-          const fileName = `${foto.tipo}_${path.basename(fullDiskPath)}`;
-          this.enqueuePhotoUpload(foto.id, auditoria.loja.nome, fullDiskPath, fileName);
-        }
+        this.enqueuePhotoUpload(
+          foto.id,
+          auditoria.loja.nome,
+          fullDiskPath,
+          fileName,
+          (foto as any).base64 || undefined
+        );
       }
     } catch (error) {
       console.error(`[GoogleDrive] Erro ao enfileirar fotos da auditoria ${auditoriaId}:`, error);
@@ -335,7 +374,8 @@ export class GoogleDriveService {
           item.lojaNome,
           item.localPath,
           item.fileName,
-          'image/webp'
+          'image/webp',
+          item.base64
         );
 
         // Atualiza o banco de dados com os links do Drive
@@ -384,15 +424,29 @@ export class GoogleDriveService {
     const baseDir = storageService.getBaseDir();
     let count = 0;
 
+    const tipoMap: Record<string, string> = {
+      foto_fachada: '01_Fachada',
+      foto_geladeira: '02_Geladeira_Fechada',
+      foto_marcas: '03_Geladeira_Aberta_Marcas',
+      foto_concorrentes: '04_Concorrentes_Detalhes',
+      foto_caixa: '05_Area_Caixa',
+      foto_display: '06_Espaco_Display'
+    };
+
     for (const foto of fotosPendentes) {
       const relative = foto.url.replace(/^\/?uploads\//, '');
       const fullDiskPath = path.join(baseDir, relative);
+      const prefix = tipoMap[foto.tipo] || foto.tipo;
+      const fileName = `${prefix}.webp`;
 
-      if (fs.existsSync(fullDiskPath)) {
-        const fileName = `${foto.tipo}_${path.basename(fullDiskPath)}`;
-        this.enqueuePhotoUpload(foto.id, foto.auditoria.loja.nome, fullDiskPath, fileName);
-        count++;
-      }
+      this.enqueuePhotoUpload(
+        foto.id,
+        foto.auditoria.loja.nome,
+        fullDiskPath,
+        fileName,
+        (foto as any).base64 || undefined
+      );
+      count++;
     }
 
     console.log(`[GoogleDrive] ${count} fotos pendentes enfileiradas para sincronização.`);
@@ -435,3 +489,10 @@ export class GoogleDriveService {
 }
 
 export const googleDriveService = new GoogleDriveService();
+
+// Dispara sincronização em segundo plano para qualquer foto pendente no banco ao inicializar o servidor
+setTimeout(() => {
+  googleDriveService.syncAllPendingPhotos().catch((e) => {
+    console.error('[GoogleDrive] Erro na sincronização inicial:', e);
+  });
+}, 3000);
