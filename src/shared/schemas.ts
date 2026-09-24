@@ -47,14 +47,38 @@ export type PesquisadorInput = z.infer<typeof PesquisadorInputSchema>;
 
 export const LojaSchema = z.object({
   id: z.string().min(1, 'ID é obrigatório'),
-  rede: z.enum(REDES_PDV),
+  rede: z.string().min(1, 'Rede é obrigatória'),
   nome: z.string().min(2, 'Nome da loja é obrigatório'),
-  endereco: z.string().min(5, 'Endereço é obrigatório'),
+  endereco: z.string().min(3, 'Endereço é obrigatório'),
   estacaoMetro: z.string().optional().nullable(),
-  cnpj: z.string().regex(/^\d{14}$/, 'CNPJ deve conter 14 dígitos numéricos'),
-  cnpjFormatado: z.string().min(18, 'CNPJ formatado inválido'),
+  cnpj: z.string().min(1, 'CNPJ é obrigatório'),
+  cnpjFormatado: z.string().min(1, 'CNPJ formatado é obrigatório'),
   status: z.enum([STATUS_LOJA.PENDENTE, STATUS_LOJA.CONCLUIDA, STATUS_LOJA.FINALIZADA_INOPERANTE])
 });
+
+/** Cadastro e edição de loja pelo coordenador */
+export const LojaInputSchema = z
+  .object({
+    rede: z.string().trim().min(2, 'Informe a rede da loja'),
+    nome: z.string().trim().min(2, 'Nome da loja deve ter pelo menos 2 caracteres'),
+    endereco: z.string().trim().min(3, 'Endereço deve ter pelo menos 3 caracteres'),
+    estacaoMetro: z.string().trim().optional().nullable(),
+    cnpj: z.string().trim().optional().nullable()
+  })
+  .superRefine((d, ctx) => {
+    if (d.cnpj && d.cnpj.trim().length > 0) {
+      const clean = d.cnpj.replace(/\D/g, '');
+      if (clean.length !== 14) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'CNPJ deve conter 14 dígitos numéricos',
+          path: ['cnpj']
+        });
+      }
+    }
+  });
+
+export type LojaInput = z.infer<typeof LojaInputSchema>;
 
 export const CnpjInputSchema = z.string().refine((val) => {
   const clean = val.replace(/\D/g, '');

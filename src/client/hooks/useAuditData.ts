@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Pesquisador, PesquisadorAdmin, Loja, ResumoDashboard } from '../../shared/types';
-import type { PesquisadorInput } from '../../shared/schemas';
+import type { PesquisadorInput, LojaInput } from '../../shared/schemas';
 import type { ResultadosLevantamento } from '../../shared/analytics';
 import { fetchCoord } from '../utils/coordApi';
 
@@ -76,7 +76,7 @@ export function useResultados(enabled = true) {
 // ---------------------------------------------------------------------------
 // Cadastro de pesquisadores (coordenador)
 
-async function enviarPesquisador(url: string, method: string, corpo?: unknown) {
+async function enviarCoord(url: string, method: string, corpo?: unknown) {
   const res = await fetchCoord(url, {
     method,
     headers: corpo ? { 'Content-Type': 'application/json' } : undefined,
@@ -103,8 +103,8 @@ export function useSalvarPesquisador() {
   return useMutation<PesquisadorAdmin, Error, { id?: string; dados: PesquisadorInput }>({
     mutationFn: ({ id, dados }) =>
       id
-        ? enviarPesquisador(`${API_BASE}/admin/pesquisadores/${id}`, 'PUT', dados)
-        : enviarPesquisador(`${API_BASE}/admin/pesquisadores`, 'POST', dados),
+        ? enviarCoord(`${API_BASE}/admin/pesquisadores/${id}`, 'PUT', dados)
+        : enviarCoord(`${API_BASE}/admin/pesquisadores`, 'POST', dados),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pesquisadoresAdmin'] });
       queryClient.invalidateQueries({ queryKey: ['pesquisadores'] });
@@ -115,10 +115,56 @@ export function useSalvarPesquisador() {
 export function useExcluirPesquisador() {
   const queryClient = useQueryClient();
   return useMutation<{ resultado: 'excluido' | 'desativado'; totalAuditorias: number }, Error, string>({
-    mutationFn: (id) => enviarPesquisador(`${API_BASE}/admin/pesquisadores/${id}`, 'DELETE'),
+    mutationFn: (id) => enviarCoord(`${API_BASE}/admin/pesquisadores/${id}`, 'DELETE'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pesquisadoresAdmin'] });
       queryClient.invalidateQueries({ queryKey: ['pesquisadores'] });
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Gestão de lojas (coordenador)
+
+export function useSalvarLoja() {
+  const queryClient = useQueryClient();
+  return useMutation<Loja, Error, { id?: string; dados: LojaInput }>({
+    mutationFn: ({ id, dados }) =>
+      id
+        ? enviarCoord(`${API_BASE}/admin/lojas/${id}`, 'PUT', dados)
+        : enviarCoord(`${API_BASE}/admin/lojas`, 'POST', dados),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lojas'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['resultados'] });
+      queryClient.invalidateQueries({ queryKey: ['pesquisadoresAdmin'] });
+      queryClient.invalidateQueries({ queryKey: ['pesquisadores'] });
+    }
+  });
+}
+
+export function useExcluirLoja() {
+  const queryClient = useQueryClient();
+  return useMutation<{ resultado: 'excluido'; id: string; nome: string }, Error, string>({
+    mutationFn: (id) => enviarCoord(`${API_BASE}/admin/lojas/${id}`, 'DELETE'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lojas'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['resultados'] });
+      queryClient.invalidateQueries({ queryKey: ['pesquisadoresAdmin'] });
+      queryClient.invalidateQueries({ queryKey: ['pesquisadores'] });
+    }
+  });
+}
+
+export function useResetarLoja() {
+  const queryClient = useQueryClient();
+  return useMutation<{ message: string; loja: Loja }, Error, string>({
+    mutationFn: (id) => enviarCoord(`${API_BASE}/lojas/${id}/reset`, 'POST'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lojas'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['resultados'] });
     }
   });
 }

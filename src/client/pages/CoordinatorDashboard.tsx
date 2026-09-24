@@ -19,6 +19,7 @@ import { REDES_PDV, STATUS_LOJA } from '../../shared/constants';
 import { AuditDetailModal } from '../components/AuditDetailModal';
 import { ResultadosLevantamento } from './ResultadosLevantamento';
 import { GestaoPesquisadores } from './GestaoPesquisadores';
+import { GestaoLojas } from './GestaoLojas';
 import { fetchCoord } from '../utils/coordApi';
 
 export const CoordinatorDashboard: React.FC<{ onSair?: () => void }> = ({ onSair }) => {
@@ -26,7 +27,7 @@ export const CoordinatorDashboard: React.FC<{ onSair?: () => void }> = ({ onSair
   const [selectedRede, setSelectedRede] = useState<string>('TODAS');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedLojaId, setSelectedLojaId] = useState<string | null>(null);
-  const [aba, setAba] = useState<'acompanhamento' | 'resultados' | 'pesquisadores'>('acompanhamento');
+  const [aba, setAba] = useState<'acompanhamento' | 'resultados' | 'lojas' | 'pesquisadores'>('acompanhamento');
 
   const { data: dashboard, refetch: refetchDash } = useDashboard();
   const { data: lojas, isLoading: isLoadingLojas, refetch: refetchLojas } = useLojas({
@@ -84,7 +85,7 @@ export const CoordinatorDashboard: React.FC<{ onSair?: () => void }> = ({ onSair
             Painel do Coordenador de Campo
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            57 PDVs da Região Metropolitana de São Paulo • 10 Pesquisadores Ativos
+            {total} PDVs da Região Metropolitana de São Paulo • Monitoramento Ativo
           </p>
         </div>
 
@@ -150,12 +151,13 @@ export const CoordinatorDashboard: React.FC<{ onSair?: () => void }> = ({ onSair
         </div>
       </div>
 
-      {/* Abas: acompanhamento da operação x resultados do levantamento (Guia §13) */}
-      <div role="tablist" className="inline-flex p-1 bg-slate-100 dark:bg-[#0B0F19] border border-slate-200 dark:border-slate-800 rounded-full">
+      {/* Abas: acompanhamento da operação x resultados x lojas x pesquisadores */}
+      <div role="tablist" className="inline-flex p-1 bg-slate-100 dark:bg-[#0B0F19] border border-slate-200 dark:border-slate-800 rounded-full flex-wrap gap-1">
         {(
           [
             ['acompanhamento', 'Acompanhamento'],
             ['resultados', 'Resultados'],
+            ['lojas', 'Lojas'],
             ['pesquisadores', 'Pesquisadores']
           ] as const
         ).map(([id, rotulo]) => (
@@ -178,6 +180,8 @@ export const CoordinatorDashboard: React.FC<{ onSair?: () => void }> = ({ onSair
 
       {aba === 'resultados' ? (
         <ResultadosLevantamento onSelectLoja={setSelectedLojaId} />
+      ) : aba === 'lojas' ? (
+        <GestaoLojas onSelectAuditLoja={setSelectedLojaId} />
       ) : aba === 'pesquisadores' ? (
         <GestaoPesquisadores />
       ) : (

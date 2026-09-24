@@ -7,7 +7,14 @@ import {
   atualizarPesquisador,
   excluirPesquisador
 } from '../controllers/pesquisadores.controller';
-import { listarLojas, obterLojaPorId, resetarLoja } from '../controllers/lojas.controller';
+import {
+  listarLojas,
+  obterLojaPorId,
+  criarLoja,
+  atualizarLoja,
+  excluirLoja,
+  resetarLoja
+} from '../controllers/lojas.controller';
 import {
   submeterAuditoria,
   uploadFoto,
@@ -45,6 +52,9 @@ apiRouter.delete('/admin/pesquisadores/:id', exigirCoordenador, excluirPesquisad
 // Lojas (com busca, filtros e validação anti-duplicação)
 apiRouter.get('/lojas', listarLojas);
 apiRouter.get('/lojas/:id', exigirCoordenador, obterLojaPorId);
+apiRouter.post('/admin/lojas', exigirCoordenador, criarLoja);
+apiRouter.put('/admin/lojas/:id', exigirCoordenador, atualizarLoja);
+apiRouter.delete('/admin/lojas/:id', exigirCoordenador, excluirLoja);
 apiRouter.post('/lojas/:id/reset', exigirCoordenador, resetarLoja);
 
 // Auditorias

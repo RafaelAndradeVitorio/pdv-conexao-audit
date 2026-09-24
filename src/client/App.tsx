@@ -22,7 +22,7 @@ export const App: React.FC = () => {
       </main>
 
       <footer className="border-t border-slate-900 py-3 px-4 text-center text-[11px] text-slate-500 break-words">
-        PDV Conexão • Operação de Auditoria de Campo (Cliente Oculto RMSP) • 57 Lojas
+        PDV Conexão • Operação de Auditoria de Campo (Cliente Oculto RMSP)
       </footer>
     </div>
   );

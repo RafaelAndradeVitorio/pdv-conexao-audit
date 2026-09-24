@@ -66,7 +66,7 @@ export const StoreSelector: React.FC<Props> = ({ selectedLoja, onSelectLoja }) =
           <span className="leading-tight">
             {restrito
               ? `Seleção do PDV (${lojas?.length ?? 0} ${lojas?.length === 1 ? 'loja liberada' : 'lojas liberadas'} para você)`
-              : 'Seleção do PDV (57 Lojas RMSP)'}
+              : `Seleção do PDV (${lojas?.length ?? 0} Lojas RMSP)`}
           </span>
         </label>
         {selectedLoja && (
