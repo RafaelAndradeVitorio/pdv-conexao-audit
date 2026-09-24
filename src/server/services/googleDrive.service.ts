@@ -17,7 +17,6 @@ export interface SyncQueueItem {
   lojaNome: string;
   localPath: string;
   fileName: string;
-  base64?: string;
   retries: number;
 }
 
@@ -28,6 +27,8 @@ export class GoogleDriveService {
   private folderCache: Map<string, string> = new Map();
   private queue: SyncQueueItem[] = [];
   private isProcessingQueue = false;
+  // Foto sendo enviada agora (já saiu da fila)
+  private fotoEmEnvio: string | null = null;
   private isInitialized = false;
 
   constructor() {
@@ -39,6 +40,12 @@ export class GoogleDriveService {
    */
   public initialize(): boolean {
     // A URL do Apps Script funciona como credencial: vem só do ambiente, nunca do código
+    // Testes automatizados não podem mandar fotos de teste para o Drive real
+    if (process.env.VITEST) {
+      console.log('[GoogleDrive] Desativado durante os testes.');
+      return false;
+    }
+
     this.webhookUrl = process.env.GOOGLE_DRIVE_WEBHOOK_URL?.trim() || null;
     this.parentFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID || DEFAULT_FOLDER_ID;
 
@@ -289,15 +296,16 @@ export class GoogleDriveService {
     fotoId: string,
     lojaNome: string,
     localFilePath: string,
-    fileName: string,
-    base64?: string
+    fileName: string
   ): void {
+    // Botão "sincronizar" apertado várias vezes não pode duplicar a foto no Drive
+    if (this.fotoEmEnvio === fotoId || this.queue.some((item) => item.fotoId === fotoId)) return;
+
     this.queue.push({
       fotoId,
       lojaNome,
       localPath: localFilePath,
       fileName,
-      base64,
       retries: 0
     });
 
@@ -318,7 +326,8 @@ export class GoogleDriveService {
         where: { id: auditoriaId },
         include: {
           loja: true,
-          fotos: true
+          // O base64 é lido do banco só na hora do envio de cada foto
+          fotos: { select: { id: true, tipo: true, url: true, driveFileId: true } }
         }
       });
 
@@ -334,13 +343,7 @@ export class GoogleDriveService {
         const prefix = NOME_ARQUIVO_FOTO[foto.tipo] || foto.tipo;
         const fileName = `${prefix}.webp`;
 
-        this.enqueuePhotoUpload(
-          foto.id,
-          auditoria.loja.nome,
-          fullDiskPath,
-          fileName,
-          (foto as any).base64 || undefined
-        );
+        this.enqueuePhotoUpload(foto.id, auditoria.loja.nome, fullDiskPath, fileName);
       }
     } catch (error) {
       console.error(`[GoogleDrive] Erro ao enfileirar fotos da auditoria ${auditoriaId}:`, error);
@@ -357,43 +360,54 @@ export class GoogleDriveService {
 
     this.isProcessingQueue = true;
 
-    while (this.queue.length > 0) {
-      const item = this.queue.shift();
-      if (!item) break;
+    try {
+      while (this.queue.length > 0) {
+        const item = this.queue.shift();
+        if (!item) break;
+        this.fotoEmEnvio = item.fotoId;
 
-      try {
-        const result = await this.uploadPhoto(
-          item.lojaNome,
-          item.localPath,
-          item.fileName,
-          'image/webp',
-          item.base64
-        );
+        try {
+          const foto = await prisma.foto.findUnique({
+            where: { id: item.fotoId },
+            select: { driveFileId: true, base64: true }
+          });
+          // Apagada (loja resetada) ou já enviada por outra rodada de sincronização
+          if (!foto || foto.driveFileId) continue;
 
-        // Atualiza o banco de dados com os links do Drive
-        await prisma.foto.update({
-          where: { id: item.fotoId },
-          data: {
-            driveFileId: result.fileId,
-            driveUrl: result.webViewLink
+          const result = await this.uploadPhoto(
+            item.lojaNome,
+            item.localPath,
+            item.fileName,
+            'image/webp',
+            foto.base64 || undefined
+          );
+
+          // Atualiza o banco de dados com os links do Drive
+          await prisma.foto.update({
+            where: { id: item.fotoId },
+            data: {
+              driveFileId: result.fileId,
+              driveUrl: result.webViewLink
+            }
+          });
+        } catch (error) {
+          console.error(`[GoogleDrive Queue] Falha ao enviar foto ${item.fileName} da loja ${item.lojaNome}:`, error);
+
+          if (item.retries < 3) {
+            item.retries += 1;
+            console.log(`[GoogleDrive Queue] Reenfileirando foto ${item.fileName} (Tentativa ${item.retries}/3)...`);
+            // Espera 2 segundos antes de tentar novamente (backoff simples)
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+            this.queue.push(item);
+          } else {
+            console.error(`[GoogleDrive Queue] Foto ${item.fileName} descartada da fila após 3 tentativas com falha.`);
           }
-        });
-      } catch (error) {
-        console.error(`[GoogleDrive Queue] Falha ao enviar foto ${item.fileName} da loja ${item.lojaNome}:`, error);
-
-        if (item.retries < 3) {
-          item.retries += 1;
-          console.log(`[GoogleDrive Queue] Reenfileirando foto ${item.fileName} (Tentativa ${item.retries}/3)...`);
-          // Espera 2 segundos antes de tentar novamente (backoff simples)
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-          this.queue.push(item);
-        } else {
-          console.error(`[GoogleDrive Queue] Foto ${item.fileName} descartada da fila após 3 tentativas com falha.`);
         }
       }
+    } finally {
+      this.fotoEmEnvio = null;
+      this.isProcessingQueue = false;
     }
-
-    this.isProcessingQueue = false;
   }
 
   /**
@@ -406,10 +420,11 @@ export class GoogleDriveService {
 
     const fotosPendentes = await prisma.foto.findMany({
       where: { driveFileId: null },
-      include: {
-        auditoria: {
-          include: { loja: true }
-        }
+      select: {
+        id: true,
+        tipo: true,
+        url: true,
+        auditoria: { select: { loja: { select: { nome: true } } } }
       }
     });
 
@@ -422,13 +437,7 @@ export class GoogleDriveService {
       const prefix = NOME_ARQUIVO_FOTO[foto.tipo] || foto.tipo;
       const fileName = `${prefix}.webp`;
 
-      this.enqueuePhotoUpload(
-        foto.id,
-        foto.auditoria.loja.nome,
-        fullDiskPath,
-        fileName,
-        (foto as any).base64 || undefined
-      );
+      this.enqueuePhotoUpload(foto.id, foto.auditoria.loja.nome, fullDiskPath, fileName);
       count++;
     }
 

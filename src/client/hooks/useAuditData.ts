@@ -14,7 +14,7 @@ export function usePesquisadores() {
       if (!res.ok) throw new Error('Falha ao carregar pesquisadores');
       return res.json();
     },
-    staleTime: 1000 * 60 * 30 // 30 min
+    staleTime: 1000 * 60 // 1 min: cadastros feitos pelo coordenador aparecem rápido
   });
 }
 

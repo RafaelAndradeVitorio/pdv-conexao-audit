@@ -46,6 +46,8 @@ export interface ApiEnvio {
   submeter(corpo: Record<string, unknown>): Promise<void>;
 }
 
+const SEM_CONEXAO = 'Sem conexão com o servidor';
+
 /** Sem resposta (status 0), servidor fora do ar ou sobrecarregado: vale tentar de novo */
 const temporario = (status: number) => status === 0 || status === 408 || status === 429 || status >= 500;
 
@@ -77,7 +79,7 @@ export async function enviarUm(
     const mensagem = err instanceof Error ? err.message : 'Falha no envio';
 
     if (temporario(status)) {
-      return { resultado: 'tentar-depois', mensagem: status === 0 ? 'Sem conexão com o servidor' : mensagem };
+      return { resultado: 'tentar-depois', mensagem: status === 0 ? SEM_CONEXAO : mensagem };
     }
     // Um envio anterior chegou ao servidor mas a resposta se perdeu: a auditoria já é deste pesquisador
     if (status === 409 && err instanceof ErroEnvio && err.corpo.pesquisadorId === envio.pesquisadorId) {
@@ -94,18 +96,32 @@ async function lerErro(res: Response): Promise<ErroEnvio> {
   const corpo = await res.json().catch(() => ({}));
   let mensagem = corpo.error || `Erro ${res.status}`;
   if (Array.isArray(corpo.issues)) mensagem = corpo.issues.map((i: any) => i.mensagem).join('; ');
+  if (res.status === 413) mensagem = 'Fotos grandes demais para enviar. Refaça as fotos e tente de novo';
   return new ErroEnvio(res.status, mensagem, corpo);
 }
 
+/**
+ * Sinal fraco no metrô pode deixar a requisição pendurada por minutos e travar a fila.
+ * O limite cresce com o tamanho (fotos): 30s + 1s a cada 20 KB.
+ */
+const limiteMs = (tamanho: number) => 30_000 + Math.ceil(tamanho / 20_000) * 1000;
+
 async function postJson(url: string, corpo: unknown): Promise<Response> {
+  const body = JSON.stringify(corpo);
+  const controle = new AbortController();
+  const timer = setTimeout(() => controle.abort(), limiteMs(body.length));
   try {
     return await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(corpo)
+      body,
+      signal: controle.signal
     });
   } catch {
-    throw new ErroEnvio(0, 'Sem conexão com o servidor');
+    // Se o servidor chegou a gravar, o reenvio recebe 409 do próprio pesquisador e conta como enviado
+    throw new ErroEnvio(0, SEM_CONEXAO);
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -171,8 +187,9 @@ export function processarFila(incluirErros = false): Promise<void> {
         if (emEnvio.has(envio.lojaId)) continue;
         if (envio.situacao === 'erro' && !incluirErros) continue;
         const r = await tentar(envio);
-        // Sem conexão: não adianta tentar os próximos agora
-        if (r.resultado === 'tentar-depois') break;
+        // Sem conexão: não adianta tentar os próximos agora.
+        // Erro do servidor em um envio não pode segurar os outros na fila.
+        if (r.resultado === 'tentar-depois' && r.mensagem === SEM_CONEXAO) break;
       }
     })().finally(() => {
       processando = null;

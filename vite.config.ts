@@ -33,12 +33,17 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
+        // Downloads do coordenador (CSV/ZIP abertos em nova aba) e fotos são navegações:
+        // sem isto o service worker responderia com o index.html do app
+        navigateFallbackDenylist: [/^\/api\//, /^\/uploads\//, /^\/health/],
         runtimeCaching: [
           {
+            // Rede primeiro: pesquisador recém-cadastrado precisa aparecer na lista na hora
             urlPattern: ({ url }) => url.pathname.startsWith('/api/pesquisadores'),
-            handler: 'StaleWhileRevalidate',
+            handler: 'NetworkFirst',
             options: {
               cacheName: 'pesquisadores-cache',
+              networkTimeoutSeconds: 3,
               expiration: {
                 maxEntries: 10,
                 maxAgeSeconds: 60 * 60 * 24 // 24 horas

@@ -51,7 +51,7 @@ export const LojaSchema = z.object({
   nome: z.string().min(2, 'Nome da loja é obrigatório'),
   endereco: z.string().min(3, 'Endereço é obrigatório'),
   estacaoMetro: z.string().optional().nullable(),
-  cnpj: z.string().min(1, 'CNPJ é obrigatório'),
+  cnpj: z.string().regex(/^\d{14}$/, 'CNPJ deve conter 14 dígitos numéricos'),
   cnpjFormatado: z.string().min(1, 'CNPJ formatado é obrigatório'),
   status: z.enum([STATUS_LOJA.PENDENTE, STATUS_LOJA.CONCLUIDA, STATUS_LOJA.FINALIZADA_INOPERANTE])
 });

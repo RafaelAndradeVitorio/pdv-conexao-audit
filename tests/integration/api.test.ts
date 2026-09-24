@@ -73,7 +73,8 @@ describe('API Integration & Concurrency Tests (SDET Suite)', () => {
     const res = await request(app).get('/api/lojas');
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
-    expect(res.body.length).toBe(57);
+    // O coordenador pode cadastrar/excluir lojas: compara com o banco em vez de fixar 57
+    expect(res.body.length).toBe(await prisma.loja.count());
 
     // Filtro por rede
     const resRede = await request(app).get('/api/lojas?rede=Monster+Dog');

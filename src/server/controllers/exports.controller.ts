@@ -33,5 +33,7 @@ export async function exportarZip(req: Request, res: Response) {
     if (!res.headersSent) {
       return res.status(500).json({ error: 'Erro ao compactar fotos em ZIP' });
     }
+    // ZIP já começou a ser enviado: corta a conexão para o navegador acusar download incompleto
+    res.destroy();
   }
 }

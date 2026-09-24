@@ -1,7 +1,6 @@
 import archiver from 'archiver';
 import fs from 'fs';
 import path from 'path';
-import { Foto } from '@prisma/client';
 import { prisma } from '../db';
 import { storageService } from '../storage/storage.service';
 import { CATEGORIAS_BEBIDA, NOME_ARQUIVO_FOTO, TIPOS_FOTO } from '../../shared/constants';
@@ -29,7 +28,8 @@ export class ExportService {
         auditoria: {
           include: {
             pesquisador: true,
-            fotos: true
+            // Sem o base64: o relatório só precisa dos links
+            fotos: { select: { tipo: true, url: true, driveUrl: true } }
           }
         }
       },
@@ -92,7 +92,7 @@ export class ExportService {
       const mapa = parseJson<MapaBebidaItem[]>(a?.mapaBebidas, []);
 
       const getFotoUrl = (tipo: string): string => {
-        const f = a?.fotos.find((foto: Foto) => foto.tipo === tipo);
+        const f = a?.fotos.find((foto) => foto.tipo === tipo);
         if (!f) return '';
         if (f.driveUrl) return f.driveUrl;
         return f.url.startsWith('http') ? f.url : `${baseUrl}${f.url}`;
@@ -154,12 +154,36 @@ export class ExportService {
       zlib: { level: 6 }
     });
 
+    // Download cancelado pelo coordenador: para de ler fotos do banco
+    let cancelado = false;
+    writableStream.on('close', () => {
+      cancelado = true;
+      archive.abort();
+    });
+
     archive.pipe(writableStream);
+
+    // Uma foto por vez: espera o arquivo processar a anterior antes de carregar a próxima,
+    // para não manter as ~400 fotos (base64) na memória do servidor ao mesmo tempo
+    const aguardarEntrada = () =>
+      new Promise<void>((resolve, reject) => {
+        const concluir = (erro?: Error) => {
+          archive.removeListener('entry', ok);
+          archive.removeListener('error', concluir);
+          writableStream.removeListener('close', ok);
+          if (erro) reject(erro);
+          else resolve();
+        };
+        const ok = () => concluir();
+        archive.once('entry', ok);
+        archive.once('error', concluir);
+        writableStream.once('close', ok);
+      });
 
     const auditorias = await prisma.auditoria.findMany({
       include: {
-        loja: true,
-        fotos: true
+        loja: { select: { nome: true } },
+        fotos: { select: { id: true, tipo: true, url: true } }
       }
     });
 
@@ -169,24 +193,32 @@ export class ExportService {
       const nomePastaLoja = aud.loja.nome.replace(/[\\/:*?"<>|]/g, '-').trim();
 
       for (const foto of aud.fotos) {
+        if (cancelado) return;
+
         const relative = foto.url.replace(/^\/?uploads\//, '');
         const fullDiskPath = path.join(baseDir, relative);
         const zipEntryName = `${nomePastaLoja}/${NOME_ARQUIVO_FOTO[foto.tipo] || foto.tipo}.webp`;
+        const processada = aguardarEntrada();
 
         if (fs.existsSync(fullDiskPath)) {
           archive.file(fullDiskPath, { name: zipEntryName });
-        } else if (foto.base64) {
-          const base64Data = foto.base64.replace(/^data:image\/\w+;base64,/, '');
-          archive.append(Buffer.from(base64Data, 'base64'), { name: zipEntryName });
         } else {
-          archive.append(`Foto: ${foto.tipo}\nURL: ${foto.url}\nLoja: ${aud.loja.nome}`, {
-            name: zipEntryName.replace(/\.webp$/, '.txt')
-          });
+          const { base64 } = (await prisma.foto.findUnique({ where: { id: foto.id }, select: { base64: true } })) || {};
+          if (base64) {
+            const base64Data = base64.replace(/^data:image\/\w+;base64,/, '');
+            archive.append(Buffer.from(base64Data, 'base64'), { name: zipEntryName });
+          } else {
+            archive.append(`Foto: ${foto.tipo}\nURL: ${foto.url}\nLoja: ${aud.loja.nome}`, {
+              name: zipEntryName.replace(/\.webp$/, '.txt')
+            });
+          }
         }
+
+        await processada;
       }
     }
 
-    await archive.finalize();
+    if (!cancelado) await archive.finalize();
   }
 }
 

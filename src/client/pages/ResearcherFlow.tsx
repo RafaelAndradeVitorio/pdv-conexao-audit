@@ -138,7 +138,7 @@ const horaCurta = (iso: string) =>
 export const ResearcherFlow: React.FC = () => {
   const { pesquisadorId } = useAppStore();
   const [selectedLoja, setSelectedLojaState] = useState<Loja | null>(lerLojaEmAndamento);
-  const { itens: fila } = useFilaEnvio();
+  const { itens: fila, reenviar } = useFilaEnvio();
 
   const [statusEntrada, setStatusEntrada] = useState<string | null>(null);
   const [justificativaInoperante, setJustificativaInoperante] = useState('');
@@ -213,6 +213,17 @@ export const ResearcherFlow: React.FC = () => {
     await remover('rascunhos', selectedLoja.id);
     setRascunhoRestaurado(null);
     limparFormulario();
+  };
+
+  const descartarEnvio = async () => {
+    if (
+      !envioNaFila ||
+      !window.confirm(
+        `Descartar a auditoria de ${envioNaFila.lojaNome} guardada neste aparelho? As respostas e fotos serão perdidas.`
+      )
+    )
+      return;
+    await descartarDaFila(envioNaFila.lojaId);
   };
 
   const isLojaBloqueada = selectedLoja?.status === 'CONCLUIDA' || selectedLoja?.status === 'FINALIZADA_INOPERANTE';
@@ -452,6 +463,16 @@ export const ResearcherFlow: React.FC = () => {
               Finalizada às {horaCurta(envioNaFila.criadoEm)} e salva no aparelho.
               {envioNaFila.mensagem ? ` Última tentativa: ${envioNaFila.mensagem}.` : ''}
             </p>
+            {envioNaFila.situacao === 'erro' && (
+              <div className="flex flex-wrap gap-3 pt-1">
+                <button type="button" onClick={() => reenviar()} className="font-semibold underline">
+                  Tentar de novo
+                </button>
+                <button type="button" onClick={descartarEnvio} className="font-semibold underline text-rose-700 dark:text-rose-300">
+                  Descartar
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

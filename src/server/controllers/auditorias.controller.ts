@@ -39,6 +39,12 @@ export async function submeterAuditoria(req: Request, res: Response) {
       });
     }
 
+    // Ex.: loja excluída pelo coordenador (404). Um 500 aqui faria o aparelho reenviar para sempre
+    const statusCode = (error as { statusCode?: number })?.statusCode;
+    if (typeof statusCode === 'number' && statusCode >= 400 && statusCode < 500) {
+      return res.status(statusCode).json({ error: (error as Error).message });
+    }
+
     console.error('Erro ao submeter auditoria:', error);
     const msg = error instanceof Error ? error.message : 'Erro interno ao salvar auditoria';
     return res.status(500).json({ error: msg });
