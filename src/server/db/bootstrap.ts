@@ -7,11 +7,17 @@ import { REAL_RESEARCHERS, REAL_STORES } from './realData';
  */
 export async function bootstrapDatabase(): Promise<void> {
   try {
-    const totalLojas = await prisma.loja.count();
-    const totalPesquisadores = await prisma.pesquisador.count();
+    const temGiovani = await prisma.pesquisador.findUnique({ where: { id: 'pesq-giovani' } });
 
-    if (totalLojas === 0 || totalPesquisadores === 0) {
-      console.log('[Bootstrap] Populando os 9 pesquisadores oficiais e as 59 lojas reais...');
+    if (!temGiovani) {
+      console.log('[Bootstrap] Atualizando banco de produção para os 9 pesquisadores oficiais e 59 lojas reais...');
+
+      // Zerar dados antigos/fictícios para sincronizar a produção com os dados oficiais
+      await prisma.foto.deleteMany({}).catch(() => undefined);
+      await prisma.auditoria.deleteMany({}).catch(() => undefined);
+      await prisma.pesquisadorLoja.deleteMany({}).catch(() => undefined);
+      await prisma.loja.deleteMany({}).catch(() => undefined);
+      await prisma.pesquisador.deleteMany({}).catch(() => undefined);
 
       const numParaLojaId = new Map<number, string>();
 
@@ -19,9 +25,8 @@ export async function bootstrapDatabase(): Promise<void> {
         const id = `loja-${s.num.toString().padStart(2, '0')}`;
         numParaLojaId.set(s.num, id);
 
-        await prisma.loja.upsert({
-          where: { id },
-          create: {
+        await prisma.loja.create({
+          data: {
             id,
             rede: s.rede,
             nome: s.nome,
@@ -30,17 +35,15 @@ export async function bootstrapDatabase(): Promise<void> {
             endereco: s.endereco,
             estacaoMetro: s.estacaoMetro,
             status: 'PENDENTE'
-          },
-          update: {}
+          }
         });
       }
 
       for (const r of REAL_RESEARCHERS) {
         const lojaIds = r.lojasNums.map((n) => numParaLojaId.get(n)!);
 
-        await prisma.pesquisador.upsert({
-          where: { id: r.id },
-          create: {
+        await prisma.pesquisador.create({
+          data: {
             id: r.id,
             nome: r.nome,
             telefone: r.telefone,
@@ -49,12 +52,11 @@ export async function bootstrapDatabase(): Promise<void> {
             lojasPermitidas: {
               create: lojaIds.map((lojaId) => ({ lojaId }))
             }
-          },
-          update: {}
+          }
         });
       }
 
-      console.log('[Bootstrap] ✓ 59 lojas reais e 9 pesquisadores cadastrados com sucesso.');
+      console.log('[Bootstrap] ✓ Banco de produção atualizado com 59 lojas reais e 9 pesquisadores cadastrados com sucesso!');
     }
   } catch (error) {
     console.error('[Bootstrap] Aviso: Falha ao executar bootstrap inicial do banco:', error);
