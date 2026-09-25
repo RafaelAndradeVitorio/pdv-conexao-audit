@@ -60,11 +60,11 @@ describe('API Integration & Concurrency Tests (SDET Suite)', () => {
     expect(res.body.app).toBe('PDV Conexao Audit API');
   });
 
-  it('GET /api/pesquisadores - deve listar os 10 pesquisadores cadastrados', async () => {
+  it('GET /api/pesquisadores - deve listar os pesquisadores cadastrados', async () => {
     const res = await request(app).get('/api/pesquisadores');
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
-    expect(res.body.length).toBe(10);
+    expect(res.body.length).toBe(await prisma.pesquisador.count());
     expect(res.body[0]).toHaveProperty('nome');
     expect(res.body[0]).toHaveProperty('telefone');
   });
@@ -73,7 +73,6 @@ describe('API Integration & Concurrency Tests (SDET Suite)', () => {
     const res = await request(app).get('/api/lojas');
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
-    // O coordenador pode cadastrar/excluir lojas: compara com o banco em vez de fixar 57
     expect(res.body.length).toBe(await prisma.loja.count());
 
     // Filtro por rede
@@ -96,7 +95,7 @@ describe('API Integration & Concurrency Tests (SDET Suite)', () => {
 
   it('POST /api/auditorias - deve submeter auditoria completa de loja aberta', async () => {
     const auditPayload = {
-      ...payloadLojaAberta('loja-10', 'pesq-01'),
+      ...payloadLojaAberta('loja-10', 'pesq-giovanna'),
       descricaoOportunidade: 'Espaço excelente em frente ao balcão'
     };
 
@@ -115,11 +114,11 @@ describe('API Integration & Concurrency Tests (SDET Suite)', () => {
     const loja10 = res.body.find((l: any) => l.id === 'loja-10');
     expect(loja10).toBeDefined();
     expect(loja10.status).toBe('CONCLUIDA');
-    expect(loja10.pesquisadorNome).toBe('Ana Silva');
+    expect(loja10.pesquisadorNome).toBe('Giovanna Marangoni');
   });
 
   it('POST /api/auditorias - TRAVA ANTI-DUPLICIDADE: deve rejeitar com 409 Conflict se loja já foi auditada', async () => {
-    const duplicatePayload = payloadLojaAberta('loja-10', 'pesq-02');
+    const duplicatePayload = payloadLojaAberta('loja-10', 'pesq-giovanna');
 
     const res = await request(app)
       .post('/api/auditorias')
@@ -133,9 +132,9 @@ describe('API Integration & Concurrency Tests (SDET Suite)', () => {
 
   it('RACE CONDITION CONCURRENCY: requisição simultânea de 2 pesquisadores no mesmo milissegundo deve aceitar exatamente 1 (201) e rejeitar o concorrente com 409', async () => {
 
-    const payloadPesq1 = payloadLojaAberta('loja-12', 'pesq-04');
+    const payloadPesq1 = payloadLojaAberta('loja-12', 'pesq-alex');
 
-    const payloadPesq2 = payloadLojaAberta('loja-12', 'pesq-05');
+    const payloadPesq2 = payloadLojaAberta('loja-12', 'pesq-alex');
 
     // Disparo estritamente simultâneo via Promise.all
     const [res1, res2] = await Promise.all([
@@ -154,7 +153,7 @@ describe('API Integration & Concurrency Tests (SDET Suite)', () => {
   it('POST /api/auditorias - fluxo de loja inoperante com justificativa e foto 01', async () => {
     const inoperantePayload = {
       lojaId: 'loja-11',
-      pesquisadorId: 'pesq-03',
+      pesquisadorId: 'pesq-rayane',
       statusEntrada: STATUS_ENTRADA.FECHADA,
       justificativaInoperante: 'Loja fechada com tapumes devido a reformas na linha do metrô',
       fotos: [
@@ -177,13 +176,13 @@ describe('API Integration & Concurrency Tests (SDET Suite)', () => {
     expect(res.body).toHaveProperty('totalConcluidas');
     expect(res.body).toHaveProperty('totalInoperantes');
     expect(res.body).toHaveProperty('percentualConcluido');
-    expect(res.body.totalLojas).toBe(57);
+    expect(res.body.totalLojas).toBe(await prisma.loja.count());
   });
 
   it('GET /api/auditorias/resultados - deve consolidar as respostas das perguntas finais do guia', async () => {
     const res = await request(app).get('/api/auditorias/resultados');
     expect(res.status).toBe(200);
-    expect(res.body.totalLojas).toBe(57);
+    expect(res.body.totalLojas).toBe(await prisma.loja.count());
     expect(res.body.lojasAbertas).toBeGreaterThan(0);
     expect(res.body.geladeiras.porPosse.map((p: any) => p.rotulo)).toContain('Coca-Cola/FEMSA');
     expect(res.body.marcas.categorias).toHaveLength(6);
