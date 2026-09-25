@@ -72,6 +72,51 @@ export const CATEGORIAS_BEBIDA = [
 
 export type CategoriaBebida = (typeof CATEGORIAS_BEBIDA)[number];
 
+export const MARCAS_POR_CATEGORIA: Record<CategoriaBebida, readonly string[]> = {
+  Refrigerantes: [
+    'Coca-Cola',
+    'Fanta',
+    'Sprite',
+    'Kuat',
+    'Schweppes',
+    'Guaraná Antarctica',
+    'Pepsi',
+    'Sukita',
+    'Dolly'
+  ],
+  Água: [
+    'Crystal',
+    'Bonafont',
+    'Minalba',
+    'Lindoya',
+    'Prata'
+  ],
+  Energéticos: [
+    'Monster',
+    'Burn',
+    'Red Bull',
+    'TNT',
+    'Baly'
+  ],
+  Isotônicos: [
+    'Powerade',
+    'Gatorade',
+    'i9'
+  ],
+  Chás: [
+    'Leão / Matte Leão',
+    'Ice Tea Lipton',
+    'Feel Good'
+  ],
+  Sucos: [
+    'Del Valle',
+    'Ades',
+    'Maguary',
+    'Natural One',
+    'Prats'
+  ]
+};
+
 // Guia §7 – Organização e exposição
 export const ORGANIZACAO_GELADEIRA = [
   'Organizada',
@@ -115,11 +160,11 @@ export const POTENCIAL_DISPLAY = [
  */
 export const TIPOS_FOTO = [
   { id: 'foto_fachada', label: 'Visão geral da loja', dica: 'Área de atendimento, sem expor clientes identificáveis. Se a loja estiver fechada, a fachada.', arquivo: '01 - Visao geral', quando: 'sempre', obrigatoriaInoperante: true },
-  { id: 'foto_geladeira', label: 'Geladeira – visão geral', dica: 'Equipamento inteiro, comunicação visual e contexto na loja.', arquivo: '02 - Geladeira', quando: 'geladeira', obrigatoriaInoperante: false },
+  { id: 'foto_geladeira', label: 'Geladeira – visão geral', dica: 'Equipamento inteiro, comunicação visual e contexto na loja. (Mostrar organização)', arquivo: '02 - Geladeira', quando: 'geladeira', obrigatoriaInoperante: false },
   { id: 'foto_marcas', label: 'Bebidas e marcas', dica: 'Foto aproximada mostrando as bebidas e marcas presentes.', arquivo: '03 - Bebidas e marcas', quando: 'geladeira', obrigatoriaInoperante: false },
   { id: 'foto_concorrentes', label: 'Concorrentes', dica: 'Foto que permita identificar claramente as marcas concorrentes.', arquivo: '04 - Concorrentes', quando: 'concorrentes', obrigatoriaInoperante: false },
   { id: 'foto_detalhe', label: 'Detalhe da geladeira', dica: 'Ponto relevante: falta de abastecimento, concorrente ocupando espaço, produto mal posicionado...', arquivo: '04b - Detalhe geladeira', quando: 'geladeira', obrigatoriaInoperante: false },
-  { id: 'foto_caixa', label: 'Área do caixa', dica: 'Caixa e entorno, displays de balas, gomas e doces.', arquivo: '05 - Area do caixa', quando: 'sempre', obrigatoriaInoperante: false },
+  { id: 'foto_caixa', label: 'Área do caixa – Oportunidade Display', dica: 'Caixa e entorno. Foto da oportunidade para o Display Coca-Cola Vai Até Você (displays de balas, gomas e doces).', arquivo: '05 - Area do caixa', quando: 'sempre', obrigatoriaInoperante: false },
   { id: 'foto_display', label: 'Espaço potencial – geral', dica: 'O espaço para o Display Coca-Cola Vai Até Você dentro do contexto da loja.', arquivo: '06 - Espaco potencial display', quando: 'espaco', obrigatoriaInoperante: false },
   { id: 'foto_display_aproximada', label: 'Espaço potencial – aproximada', dica: 'Onde exatamente o display poderia ser colocado.', arquivo: '06b - Espaco potencial display (aproximada)', quando: 'espaco', obrigatoriaInoperante: false }
 ] as const;

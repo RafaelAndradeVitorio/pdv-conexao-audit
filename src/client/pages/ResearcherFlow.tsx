@@ -16,6 +16,7 @@ import {
   MARCAS_COCA_COLA,
   CATEGORIAS_BEBIDA,
   CategoriaBebida,
+  MARCAS_POR_CATEGORIA,
   fotosObrigatorias
 } from '../../shared/constants';
 import { AuditoriaSubmissionSchema, MapaBebidaItem } from '../../shared/schemas';
@@ -255,6 +256,30 @@ export const ResearcherFlow: React.FC = () => {
         ? prev.marcasCocaPresentes.filter((m) => m !== marca)
         : [...prev.marcasCocaPresentes, marca]
     }));
+
+  const toggleMarcaNoMapa = (categoria: CategoriaBebida, marca: string) => {
+    const item = form.mapaBebidas.find((m) => m.categoria === categoria);
+    const marcasAtuais = (item?.marcas || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const novasMarcas = marcasAtuais.includes(marca)
+      ? marcasAtuais.filter((m) => m !== marca)
+      : [...marcasAtuais, marca];
+
+    const patch: Partial<MapaBebidaItem> = {
+      marcas: novasMarcas.join(', ')
+    };
+
+    // Se selecionou concorrente conhecido e campo concorrentes estiver nulo, sugere true
+    const eConcorrente = !MARCAS_COCA_COLA.includes(marca as any);
+    if (eConcorrente && novasMarcas.includes(marca) && (item?.concorrentes === null || item?.concorrentes === undefined)) {
+      patch.concorrentes = true;
+    }
+
+    setMapa(categoria, patch);
+  };
 
   const handlePhotoCaptured = (tipo: string, data: { size: number; previewUrl: string }) => {
     setPhotos((prev) => ({
@@ -606,20 +631,45 @@ export const ResearcherFlow: React.FC = () => {
                           onChange={(v) => setMapa(item.categoria, { tem: v })}
                         />
                         {item.tem && (
-                          <>
-                            <input
-                              type="text"
-                              value={item.marcas || ''}
-                              onChange={(e) => setMapa(item.categoria, { marcas: e.target.value })}
-                              placeholder="Principais marcas"
-                              className={inputClass}
-                            />
+                          <div className="pt-1.5 space-y-2.5 border-t border-slate-200/60 dark:border-slate-800/60">
+                            <div>
+                              <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 block mb-1.5">
+                                Marcas presentes em {item.categoria} (toque para marcar):
+                              </label>
+                              <div className="flex flex-wrap gap-1.5">
+                                {(MARCAS_POR_CATEGORIA[item.categoria] || []).map((marca) => {
+                                  const selecionadas = (item.marcas || '')
+                                    .split(',')
+                                    .map((s) => s.trim())
+                                    .filter(Boolean);
+                                  const selecionada = selecionadas.includes(marca);
+                                  return (
+                                    <button
+                                      key={marca}
+                                      type="button"
+                                      aria-pressed={selecionada}
+                                      onClick={() => toggleMarcaNoMapa(item.categoria, marca)}
+                                      className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all touch-manipulation flex items-center gap-1 ${
+                                        selecionada
+                                          ? 'bg-blue-600 border-blue-600 text-white font-semibold shadow-xs'
+                                          : 'bg-white dark:bg-[#131B2B] border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-blue-300'
+                                      }`}
+                                    >
+                                      <span>{marca}</span>
+                                      <span className="text-[10px] font-bold">
+                                        {selecionada ? '✓' : '+'}
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
                             <SimNaoToggle
                               pergunta="Tem concorrentes?"
                               value={item.concorrentes ?? null}
                               onChange={(v) => setMapa(item.categoria, { concorrentes: v })}
                             />
-                          </>
+                          </div>
                         )}
                       </div>
                     ))}

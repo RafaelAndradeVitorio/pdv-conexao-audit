@@ -49,7 +49,9 @@ export const PhotoCaptureGrid: React.FC<Props> = ({
       });
     } catch (err: any) {
       console.error('Falha no processamento da foto:', err);
-      alert(`Erro ao processar a foto: ${err.message || 'Tente novamente'}`);
+      alert(
+        `Falha ao processar a foto: ${err.message || 'Tente novamente'}.\n\nDica: Se o celular acusar espaço ou memória insuficiente, você também pode tirar a foto normalmente pelo app de câmera do celular e depois tocar aqui para selecioná-la da galeria.`
+      );
     } finally {
       setComprimindo(null);
       if (fileInputRefs.current[tipo]) {
@@ -82,6 +84,7 @@ export const PhotoCaptureGrid: React.FC<Props> = ({
           const photoState = photos[tipoObj.id];
           const hasPhoto = !!photoState?.url || !!photoState?.previewUrl;
           const isUploading = comprimindo === tipoObj.id;
+          const isDisplayOpportunity = tipoObj.id === 'foto_caixa';
 
           return (
             // Android M3 Outlined Card
@@ -90,11 +93,13 @@ export const PhotoCaptureGrid: React.FC<Props> = ({
               className={`relative border rounded-3xl p-3.5 flex flex-col justify-between transition-all shadow-sm ${
                 hasPhoto
                   ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-400 dark:border-emerald-700/60'
+                  : isDisplayOpportunity
+                  ? 'bg-amber-50/30 dark:bg-amber-950/10 border-amber-300/80 dark:border-amber-800/60 hover:border-amber-400'
                   : 'bg-white dark:bg-[#131B2B] border-slate-200/90 dark:border-slate-800 hover:border-blue-400/80'
               }`}
             >
               {/* Header do Card com Número e Título */}
-              <div className="flex items-start justify-between gap-2 mb-2.5 min-w-0">
+              <div className="flex items-start justify-between gap-2 mb-2 min-w-0">
                 <span className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2 min-w-0 flex-1">
                   <span className="h-5 w-5 rounded-full bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-[11px] font-mono flex items-center justify-center font-bold shrink-0">
                     {index + 1}
@@ -106,7 +111,15 @@ export const PhotoCaptureGrid: React.FC<Props> = ({
                 )}
               </div>
 
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug mb-2.5 -mt-1">{tipoObj.dica}</p>
+              {isDisplayOpportunity && (
+                <div className="mb-2">
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/60 px-2 py-0.5 rounded-full border border-amber-300 dark:border-amber-800">
+                    ⭐ Oportunidade Display Coca-Cola Vai Até Você
+                  </span>
+                </div>
+              )}
+
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug mb-2.5 -mt-0.5">{tipoObj.dica}</p>
 
               {/* Área de Visualização com cantos arredondados M3 */}
               <div className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-slate-100 dark:bg-[#0B0F19] border border-slate-200 dark:border-slate-800 flex items-center justify-center">
@@ -128,7 +141,7 @@ export const PhotoCaptureGrid: React.FC<Props> = ({
                   <div className="flex flex-col items-center justify-center p-4 text-center">
                     <ImageIcon className="w-8 h-8 text-slate-400 dark:text-slate-600 mb-1.5" />
                     <span className="text-xs text-slate-600 dark:text-slate-400 font-medium">Nenhuma foto registrada</span>
-                    <span className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Toque abaixo para abrir câmera</span>
+                    <span className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Câmera ou Galeria do Celular</span>
                   </div>
                 )}
               </div>
@@ -139,7 +152,6 @@ export const PhotoCaptureGrid: React.FC<Props> = ({
                   ref={(el) => { fileInputRefs.current[tipoObj.id] = el; }}
                   type="file"
                   accept="image/*"
-                  capture="environment"
                   className="hidden"
                   onChange={(e) => handleFileChange(tipoObj.id, e)}
                   disabled={isUploading}
