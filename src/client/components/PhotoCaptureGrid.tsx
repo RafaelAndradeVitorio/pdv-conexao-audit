@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { compressAuditPhoto } from '../utils/compression';
 import { Camera, RefreshCw, CheckCircle, Loader2, Sparkles, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { TIPOS_FOTO } from '../../shared/constants';
+import { InAppCamera } from './InAppCamera';
 
 export interface PhotoState {
   tipo: string;
@@ -32,14 +33,13 @@ export const PhotoCaptureGrid: React.FC<Props> = ({
   onPhotoReset
 }) => {
   const [comprimindo, setComprimindo] = useState<string | null>(null);
+  /** Tipo de foto com a câmera do app aberta */
+  const [cameraTipo, setCameraTipo] = useState<string | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const listToRender = TIPOS_FOTO.filter((f) => tipos.includes(f.id));
 
-  const handleFileChange = async (tipo: string, e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const processFile = async (tipo: string, file: File) => {
     try {
       setComprimindo(tipo);
       const compressionResult = await compressAuditPhoto(file);
@@ -50,15 +50,35 @@ export const PhotoCaptureGrid: React.FC<Props> = ({
     } catch (err: any) {
       console.error('Falha no processamento da foto:', err);
       alert(
-        `Falha ao processar a foto: ${err.message || 'Tente novamente'}.\n\nDica: Se o celular acusar espaço ou memória insuficiente, você também pode tirar a foto normalmente pelo app de câmera do celular e depois tocar aqui para selecioná-la da galeria.`
+        `Falha ao processar a foto: ${err.message || 'Tente novamente'}.\n\nDica: Se o celular acusar espaço ou memória insuficiente, tire a foto pelo app de câmera do celular e depois toque em "Galeria" para selecioná-la.`
       );
     } finally {
       setComprimindo(null);
-      if (fileInputRefs.current[tipo]) {
-        fileInputRefs.current[tipo]!.value = '';
-      }
     }
   };
+
+  const handleFileChange = (tipo: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (file) processFile(tipo, file);
+  };
+
+  /** Câmera do navegador indisponível: abre o app de câmera do celular */
+  const abrirCameraNativa = (tipo: string) => {
+    setCameraTipo(null);
+    // Criado fora do DOM: o input da galeria continua sendo o único do card
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.setAttribute('capture', 'environment');
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (file) processFile(tipo, file);
+    };
+    input.click();
+  };
+
+  const cameraTipoObj = cameraTipo ? TIPOS_FOTO.find((f) => f.id === cameraTipo) : undefined;
 
   return (
     <div className="space-y-3.5">
@@ -124,24 +144,22 @@ export const PhotoCaptureGrid: React.FC<Props> = ({
               {/* Área de Visualização com cantos arredondados M3 */}
               <div className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-slate-100 dark:bg-[#0B0F19] border border-slate-200 dark:border-slate-800 flex items-center justify-center">
                 {hasPhoto ? (
-                  <>
-                    <img
-                      src={photoState?.previewUrl || photoState?.url}
-                      alt={tipoObj.label}
-                      className="w-full h-full object-cover"
-                    />
-                    {isUploading && (
-                      <div className="absolute inset-0 bg-slate-950/75 backdrop-blur-xs flex flex-col items-center justify-center p-2 text-center text-xs text-white">
-                        <Loader2 className="w-6 h-6 animate-spin text-blue-400 mb-1.5" />
-                        <span className="font-medium">Comprimindo foto...</span>
-                      </div>
-                    )}
-                  </>
+                  <img
+                    src={photoState?.previewUrl || photoState?.url}
+                    alt={tipoObj.label}
+                    className="w-full h-full object-cover"
+                  />
                 ) : (
                   <div className="flex flex-col items-center justify-center p-4 text-center">
                     <ImageIcon className="w-8 h-8 text-slate-400 dark:text-slate-600 mb-1.5" />
                     <span className="text-xs text-slate-600 dark:text-slate-400 font-medium">Nenhuma foto registrada</span>
-                    <span className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Câmera ou Galeria do Celular</span>
+                    <span className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Use a Câmera ou a Galeria</span>
+                  </div>
+                )}
+                {isUploading && (
+                  <div className="absolute inset-0 bg-slate-950/75 backdrop-blur-xs flex flex-col items-center justify-center p-2 text-center text-xs text-white">
+                    <Loader2 className="w-6 h-6 animate-spin text-blue-400 mb-1.5" />
+                    <span className="font-medium">Comprimindo foto...</span>
                   </div>
                 )}
               </div>
@@ -158,26 +176,46 @@ export const PhotoCaptureGrid: React.FC<Props> = ({
                 />
 
                 {!hasPhoto ? (
-                  // M3 Filled Button (pill shape, h-11)
-                  <button
-                    type="button"
-                    onClick={() => fileInputRefs.current[tipoObj.id]?.click()}
-                    disabled={isUploading}
-                    className="w-full h-11 px-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-medium text-xs rounded-full flex items-center justify-center gap-2 touch-manipulation transition shadow-sm"
-                  >
-                    <Camera className="w-4 h-4" />
-                    <span>Tirar Foto {index + 1}</span>
-                  </button>
-                ) : (
                   <div className="w-full flex items-center gap-2">
+                    {/* M3 Filled Button (pill shape, h-11) */}
+                    <button
+                      type="button"
+                      onClick={() => setCameraTipo(tipoObj.id)}
+                      disabled={isUploading}
+                      className="flex-1 h-11 px-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-medium text-xs rounded-full flex items-center justify-center gap-2 touch-manipulation transition shadow-sm whitespace-nowrap"
+                    >
+                      <Camera className="w-4 h-4 shrink-0" />
+                      <span>Câmera</span>
+                    </button>
                     {/* M3 Tonal Button */}
                     <button
                       type="button"
                       onClick={() => fileInputRefs.current[tipoObj.id]?.click()}
                       disabled={isUploading}
+                      className="flex-1 h-11 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium text-xs rounded-full flex items-center justify-center gap-2 touch-manipulation transition whitespace-nowrap"
+                    >
+                      <ImageIcon className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                      <span>Galeria</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-full flex items-center gap-2">
+                    {/* M3 Tonal Buttons */}
+                    <button
+                      type="button"
+                      onClick={() => setCameraTipo(tipoObj.id)}
+                      disabled={isUploading}
                       className="flex-1 h-9 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs rounded-full font-medium flex items-center justify-center gap-1.5 transition touch-manipulation whitespace-nowrap"
                     >
                       <RefreshCw className="w-3 h-3 text-blue-600 dark:text-blue-400 shrink-0" /> Refazer
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRefs.current[tipoObj.id]?.click()}
+                      disabled={isUploading}
+                      className="h-9 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs rounded-full font-medium flex items-center justify-center gap-1.5 transition touch-manipulation shrink-0 whitespace-nowrap"
+                    >
+                      <ImageIcon className="w-3 h-3 text-blue-600 dark:text-blue-400 shrink-0" /> Galeria
                     </button>
                     {/* M3 Error Outlined Button */}
                     <button
@@ -195,6 +233,18 @@ export const PhotoCaptureGrid: React.FC<Props> = ({
           );
         })}
       </div>
+
+      {cameraTipo && (
+        <InAppCamera
+          titulo={cameraTipoObj?.label ?? 'Foto'}
+          onCapture={(file) => {
+            setCameraTipo(null);
+            processFile(cameraTipo, file);
+          }}
+          onClose={() => setCameraTipo(null)}
+          onFallback={() => abrirCameraNativa(cameraTipo)}
+        />
+      )}
     </div>
   );
 };
