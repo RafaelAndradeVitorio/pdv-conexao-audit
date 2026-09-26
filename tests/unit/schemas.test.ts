@@ -5,7 +5,14 @@ import {
   CnpjInputSchema,
   UploadFotoSchema
 } from '../../src/shared/schemas';
-import { STATUS_ENTRADA, CATEGORIAS_BEBIDA, NAO_IDENTIFICADO } from '../../src/shared/constants';
+import {
+  STATUS_ENTRADA,
+  CATEGORIAS_BEBIDA,
+  NAO_IDENTIFICADO,
+  fotosObrigatorias,
+  nomeArquivoFoto,
+  lerTipoFoto
+} from '../../src/shared/constants';
 
 describe('Zod Schemas Unit Tests (QA / SDET Suite)', () => {
   describe('AuditoriaSubmissionSchema', () => {
@@ -19,22 +26,35 @@ describe('Zod Schemas Unit Tests (QA / SDET Suite)', () => {
         concorrentes: categoria === 'Refrigerantes' ? true : categoria === 'Chás' ? null : false
       }));
 
+    const geladeiraCompleta = (extra: Record<string, unknown> = {}): Record<string, unknown> => ({
+      identificacao: 'Vertical ao lado do caixa',
+      marcaVisual: 'Coca-Cola',
+      posse: 'Coca-Cola/FEMSA',
+      monsterPresente: true,
+      mapaBebidas: mapaCompleto(),
+      organizacao: 'Organizada',
+      abastecimento: 'Cheia',
+      visibilidade: 'Produtos facilmente identificáveis',
+      concorrentesMisturados: true,
+      concorrentesDetalhes: 'Pepsi na 2ª prateleira',
+      ...extra
+    });
+
+    const fotosGeladeira = (n: number, concorrentes = true) =>
+      ['foto_geladeira', 'foto_marcas', ...(concorrentes ? ['foto_concorrentes'] : []), 'foto_detalhe'].map((t) =>
+        foto(`${t}:${n}`)
+      );
+
+    const fotosLoja = () => ['foto_fachada', 'foto_caixa', 'foto_display', 'foto_display_aproximada'].map(foto);
+
     const lojaAbertaCompleta = () => ({
       lojaId: 'loja-01',
       pesquisadorId: 'pesq-01',
       statusEntrada: STATUS_ENTRADA.ABERTA,
       existeGeladeira: true,
-      marcaVisualGeladeira: 'Coca-Cola',
-      posseGeladeira: 'Coca-Cola/FEMSA',
+      geladeiras: [geladeiraCompleta()],
       monsterPresente: true,
-      monsterNaGeladeira: true,
-      mapaBebidas: mapaCompleto(),
       marcasCocaPresentes: ['Coca-Cola', 'Fanta', 'Monster'],
-      organizacaoGeladeira: 'Organizada',
-      abastecimentoGeladeira: 'Cheia',
-      visibilidadeMarcas: 'Produtos facilmente identificáveis',
-      concorrentesMisturados: true,
-      concorrentesDetalhes: 'Pepsi na 2ª prateleira',
       espacoLivreCaixa: true,
       espacoLadoTamanho: 'Lado direito, 50cm',
       boaVisibilidadeCaixa: true,
@@ -44,16 +64,7 @@ describe('Zod Schemas Unit Tests (QA / SDET Suite)', () => {
       displaysImpulsoProximo: true,
       potencialDisplay: 'Alto',
       descricaoOportunidade: 'Ótima visibilidade junto ao caixa',
-      fotos: [
-        'foto_fachada',
-        'foto_geladeira',
-        'foto_marcas',
-        'foto_concorrentes',
-        'foto_detalhe',
-        'foto_caixa',
-        'foto_display',
-        'foto_display_aproximada'
-      ].map(foto)
+      fotos: [...fotosLoja(), ...fotosGeladeira(1)]
     });
 
     const mensagens = (data: unknown) => {
@@ -67,7 +78,8 @@ describe('Zod Schemas Unit Tests (QA / SDET Suite)', () => {
 
     it('deve falhar se loja aberta não tiver as fotos obrigatórias', () => {
       const msgs = mensagens({ ...lojaAbertaCompleta(), fotos: [foto('foto_fachada')] });
-      expect(msgs.some((m) => m.includes('Foto obrigatória ausente'))).toBe(true);
+      expect(msgs).toContain('Foto obrigatória ausente: Área do caixa – Oportunidade Display');
+      expect(msgs).toContain('Geladeira 1: foto obrigatória ausente – Geladeira – visão geral');
     });
 
     it('não deve aceitar checklist sem respostas (nada pode vir pré-preenchido)', () => {
@@ -102,33 +114,100 @@ describe('Zod Schemas Unit Tests (QA / SDET Suite)', () => {
       expect(mensagens(semGeladeira)).toEqual([]);
     });
 
-    it('foto de concorrentes só é exigida quando há concorrentes misturados', () => {
+    it('com geladeira, exige ao menos uma geladeira registrada', () => {
+      expect(mensagens({ ...lojaAbertaCompleta(), geladeiras: [] })).toContain('Registre ao menos uma geladeira');
+    });
+
+    it('foto de concorrentes só é exigida na geladeira com concorrentes misturados', () => {
       const semConcorrentes = {
         ...lojaAbertaCompleta(),
-        concorrentesMisturados: false,
-        concorrentesDetalhes: null,
-        fotos: lojaAbertaCompleta().fotos.filter((f) => f.tipo !== 'foto_concorrentes')
+        geladeiras: [geladeiraCompleta({ concorrentesMisturados: false, concorrentesDetalhes: null })],
+        fotos: [...fotosLoja(), ...fotosGeladeira(1, false)]
       };
       expect(mensagens(semConcorrentes)).toEqual([]);
 
       const comConcorrentesSemFoto = { ...lojaAbertaCompleta(), fotos: semConcorrentes.fotos };
-      expect(mensagens(comConcorrentesSemFoto)).toContain('Foto obrigatória ausente: Concorrentes');
+      expect(mensagens(comConcorrentesSemFoto)).toContain('Geladeira 1: foto obrigatória ausente – Concorrentes');
     });
 
-    it('deve exigir o mapa de bebidas completo quando existe geladeira', () => {
+    it('deve exigir o mapa de bebidas completo em cada geladeira', () => {
       const mapa = mapaCompleto().map((m) => (m.categoria === 'Água' ? { ...m, tem: null } : m));
-      expect(mensagens({ ...lojaAbertaCompleta(), mapaBebidas: mapa })).toContain(
-        'Mapa de bebidas: informe se tem Água'
+      expect(mensagens({ ...lojaAbertaCompleta(), geladeiras: [geladeiraCompleta({ mapaBebidas: mapa })] })).toContain(
+        'Geladeira 1: mapa de bebidas: informe se tem Água'
       );
     });
 
     it('deve aceitar "Não foi possível identificar" na identificação e posse da geladeira', () => {
       const data = {
         ...lojaAbertaCompleta(),
-        marcaVisualGeladeira: NAO_IDENTIFICADO,
-        posseGeladeira: NAO_IDENTIFICADO
+        geladeiras: [geladeiraCompleta({ marcaVisual: NAO_IDENTIFICADO, posse: NAO_IDENTIFICADO })]
       };
       expect(mensagens(data)).toEqual([]);
+    });
+
+    describe('várias geladeiras na mesma loja', () => {
+      const tresGeladeiras = () => ({
+        ...lojaAbertaCompleta(),
+        geladeiras: [
+          geladeiraCompleta(),
+          geladeiraCompleta({ identificacao: 'Horizontal', posse: 'Monster', concorrentesMisturados: false, concorrentesDetalhes: null }),
+          geladeiraCompleta({ identificacao: null, monsterPresente: false })
+        ],
+        fotos: [...fotosLoja(), ...fotosGeladeira(1), ...fotosGeladeira(2, false), ...fotosGeladeira(3)]
+      });
+
+      it('valida uma loja com 3 geladeiras completas', () => {
+        expect(mensagens(tresGeladeiras())).toEqual([]);
+      });
+
+      it('aponta a pendência só na geladeira que falta responder', () => {
+        const data = tresGeladeiras();
+        data.geladeiras[1] = { ...data.geladeiras[1], abastecimento: null };
+        expect(mensagens(data)).toEqual(['Geladeira 2: avalie o abastecimento']);
+      });
+
+      it('exige as fotos de cada geladeira separadamente', () => {
+        const data = tresGeladeiras();
+        data.fotos = data.fotos.filter((f) => f.tipo !== 'foto_marcas:3');
+        expect(mensagens(data)).toEqual(['Geladeira 3: foto obrigatória ausente – Bebidas e marcas']);
+      });
+
+      it('Monster em uma geladeira exige Monster na loja', () => {
+        expect(mensagens({ ...tresGeladeiras(), monsterPresente: false })).toContain(
+          'Há Monster em uma geladeira: marque que existe Monster na loja'
+        );
+      });
+    });
+
+    it('aceita o envio no formato antigo (uma geladeira em campos soltos) como Geladeira 1', () => {
+      const antigo = {
+        lojaId: 'loja-01',
+        pesquisadorId: 'pesq-01',
+        statusEntrada: STATUS_ENTRADA.ABERTA,
+        existeGeladeira: true,
+        marcaVisualGeladeira: 'Coca-Cola',
+        posseGeladeira: 'Coca-Cola/FEMSA',
+        monsterPresente: true,
+        monsterNaGeladeira: true,
+        mapaBebidas: mapaCompleto(),
+        marcasCocaPresentes: ['Coca-Cola'],
+        organizacaoGeladeira: 'Organizada',
+        abastecimentoGeladeira: 'Cheia',
+        visibilidadeMarcas: 'Produtos facilmente identificáveis',
+        concorrentesMisturados: false,
+        espacoLivreCaixa: false,
+        espacoDisponivel: 'Limitado',
+        outrosDisplaysImpulso: false,
+        potencialDisplay: 'Baixo',
+        // Fotos antigas, sem o número da geladeira
+        fotos: ['foto_fachada', 'foto_caixa', 'foto_geladeira', 'foto_marcas', 'foto_detalhe'].map(foto)
+      };
+      const result = AuditoriaSubmissionSchema.safeParse(antigo);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.geladeiras).toHaveLength(1);
+        expect(result.data.geladeiras[0]).toMatchObject({ posse: 'Coca-Cola/FEMSA', monsterPresente: true, abastecimento: 'Cheia' });
+      }
     });
 
     it('deve validar com sucesso loja inoperante com justificativa e foto de visão geral', () => {
@@ -173,6 +252,36 @@ describe('Zod Schemas Unit Tests (QA / SDET Suite)', () => {
         fotos: []
       });
       expect(msgs).toContain('Foto obrigatória ausente: Visão geral da loja');
+    });
+  });
+
+  describe('Fotos por geladeira', () => {
+    it('fotosObrigatorias numera as fotos de cada geladeira', () => {
+      const tipos = fotosObrigatorias({
+        inoperante: false,
+        existeGeladeira: true,
+        geladeiras: [{ concorrentesMisturados: false }, { concorrentesMisturados: true }],
+        espacoLivreCaixa: false
+      });
+      expect(tipos).toEqual([
+        'foto_fachada',
+        'foto_caixa',
+        'foto_geladeira:1',
+        'foto_marcas:1',
+        'foto_detalhe:1',
+        'foto_geladeira:2',
+        'foto_marcas:2',
+        'foto_concorrentes:2',
+        'foto_detalhe:2'
+      ]);
+    });
+
+    it('fotos antigas sem número são da geladeira 1 e mantêm o nome do arquivo', () => {
+      expect(lerTipoFoto('foto_geladeira')).toEqual({ base: 'foto_geladeira', geladeira: 1 });
+      expect(lerTipoFoto('foto_caixa')).toEqual({ base: 'foto_caixa', geladeira: null });
+      expect(nomeArquivoFoto('foto_geladeira')).toBe('02 - Geladeira');
+      expect(nomeArquivoFoto('foto_geladeira:2')).toBe('02 - Geladeira - G2');
+      expect(nomeArquivoFoto('foto_caixa')).toBe('05 - Area do caixa');
     });
   });
 

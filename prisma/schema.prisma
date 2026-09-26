@@ -62,6 +62,8 @@ model Auditoria {
   justificativaInoperante String? @map("justificativa_inoperante")
 
   existeGeladeira        Boolean? @map("existe_geladeira")
+  // Legado (antes de várias geladeiras por loja): as respostas por geladeira ficam em Geladeira.
+  // Mantidas só para o backfill das auditorias antigas; auditorias novas não gravam estes campos.
   marcaVisualGeladeira   String?  @map("marca_visual_geladeira")
   posseGeladeira         String?  @map("posse_geladeira")
   // A coluna organizacao_geladeira sempre guardou o nível de abastecimento (Cheia ... Quase vazia)
@@ -70,9 +72,10 @@ model Auditoria {
   visibilidadeMarcas     String?  @map("visibilidade_marcas")
 
   monsterPresente     Boolean? @map("monster_presente")
+  // Derivado: alguma geladeira tem Monster
   monsterNaGeladeira  Boolean? @map("monster_na_geladeira")
   marcasCocaPresentes String?  @map("marcas_coca_presentes")
-  // JSON: [{ categoria, tem, marcas, concorrentes }]
+  // Legado: JSON [{ categoria, tem, marcas, concorrentes }] (hoje fica em Geladeira)
   mapaBebidas         String?  @map("mapa_bebidas") @db.Text
 
   concorrentesMisturados Boolean? @map("concorrentes_misturados")
@@ -94,9 +97,36 @@ model Auditoria {
   loja        Loja        @relation(fields: [lojaId], references: [id], onDelete: Cascade)
   pesquisador Pesquisador @relation(fields: [pesquisadorId], references: [id])
   fotos       Foto[]
+  geladeiras  Geladeira[]
 
   @@index([pesquisadorId])
   @@map("auditorias")
+}
+
+/// Uma geladeira da loja: cada uma tem suas respostas e fotos (tipo com sufixo ":<ordem>")
+model Geladeira {
+  id                     String   @id @default(cuid())
+  auditoriaId            String   @map("auditoria_id")
+  // 1, 2, 3... na ordem em que o pesquisador registrou
+  ordem                  Int
+  // Texto livre para distinguir as geladeiras ("Vertical Coca ao lado do caixa")
+  identificacao          String?
+  marcaVisual            String?  @map("marca_visual")
+  posse                  String?
+  monsterPresente        Boolean? @map("monster_presente")
+  // JSON: [{ categoria, tem, marcas, concorrentes }]
+  mapaBebidas            String?  @map("mapa_bebidas") @db.Text
+  organizacao            String?
+  abastecimento          String?
+  visibilidade           String?
+  concorrentesMisturados Boolean? @map("concorrentes_misturados")
+  concorrentesDetalhes   String?  @map("concorrentes_detalhes")
+  createdAt              DateTime @default(now()) @map("created_at")
+
+  auditoria Auditoria @relation(fields: [auditoriaId], references: [id], onDelete: Cascade)
+
+  @@unique([auditoriaId, ordem])
+  @@map("geladeiras")
 }
 
 model Foto {

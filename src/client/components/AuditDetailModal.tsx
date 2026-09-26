@@ -20,8 +20,8 @@ import {
   Image as ImageIcon,
   RotateCcw
 } from 'lucide-react';
-import { STATUS_LOJA, TIPOS_FOTO } from '../../shared/constants';
-import { AuditoriaFoto } from '../../shared/types';
+import { STATUS_LOJA, lerTipoFoto, metaTipoFoto } from '../../shared/constants';
+import { AuditoriaFoto, Geladeira } from '../../shared/types';
 
 interface AuditDetailModalProps {
   lojaId: string | null;
@@ -29,6 +29,75 @@ interface AuditDetailModalProps {
 }
 
 const simNao = (v: boolean | null | undefined) => (v === true ? 'Sim' : v === false ? 'Não' : '—');
+
+const Campo: React.FC<{ rotulo: string; valor: React.ReactNode }> = ({ rotulo, valor }) => (
+  <div className="bg-white dark:bg-[#131B2B] p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
+    <div className="text-[11px] text-slate-500">{rotulo}</div>
+    <div className="font-bold text-slate-900 dark:text-slate-100 mt-0.5 break-words">{valor || '—'}</div>
+  </div>
+);
+
+/** Respostas de uma geladeira (Guia §4 a §7) */
+const GeladeiraDetalhe: React.FC<{ g: Geladeira; unica: boolean }> = ({ g, unica }) => {
+  const mapa = g.mapaBebidas || [];
+  return (
+    <div data-geladeira={g.ordem} className="bg-slate-50 dark:bg-[#0B0F19]/40 p-3.5 rounded-2xl border border-slate-200/60 dark:border-slate-800 space-y-3 text-xs">
+      {!unica || g.identificacao ? (
+        <div className="font-bold text-slate-900 dark:text-slate-100 break-words">
+          Geladeira {g.ordem}
+          {g.identificacao && <span className="font-normal text-slate-500"> · {g.identificacao}</span>}
+        </div>
+      ) : null}
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-2.5">
+        <Campo rotulo="Identificação Visual" valor={g.marcaVisual} />
+        <Campo rotulo="Aparenta Pertencer a" valor={g.posse} />
+        <Campo rotulo="Monster nesta geladeira?" valor={simNao(g.monsterPresente)} />
+        <Campo rotulo="Organização" valor={g.organizacao} />
+        <Campo rotulo="Abastecimento" valor={g.abastecimento} />
+        <Campo rotulo="Visibilidade das Marcas" valor={g.visibilidade} />
+      </div>
+
+      <div className="bg-white dark:bg-[#131B2B] p-3 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-1">
+        <div className="font-bold text-slate-800 dark:text-slate-200 flex items-center justify-between">
+          <span>Concorrentes Misturados</span>
+          <span className={`text-[11px] font-semibold ${g.concorrentesMisturados ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400'}`}>
+            {g.concorrentesMisturados ? 'Sim (Detectado)' : simNao(g.concorrentesMisturados)}
+          </span>
+        </div>
+        {g.concorrentesDetalhes && (
+          <div className="text-[11px] text-slate-600 dark:text-slate-400 italic break-words">"{g.concorrentesDetalhes}"</div>
+        )}
+      </div>
+
+      {mapa.length > 0 && (
+        <div className="bg-white dark:bg-[#131B2B] p-3 rounded-xl border border-slate-200/60 dark:border-slate-800 overflow-x-auto">
+          <div className="text-[11px] font-bold uppercase text-slate-500 mb-2">Mapa de Bebidas</div>
+          <table className="w-full text-left">
+            <thead>
+              <tr className="text-[11px] text-slate-500">
+                <th className="py-1 pr-2 font-semibold">Categoria</th>
+                <th className="py-1 pr-2 font-semibold">Tem?</th>
+                <th className="py-1 pr-2 font-semibold">Principais marcas</th>
+                <th className="py-1 font-semibold">Concorrentes?</th>
+              </tr>
+            </thead>
+            <tbody>
+              {mapa.map((item) => (
+                <tr key={item.categoria} className="border-t border-slate-200/60 dark:border-slate-800 text-slate-800 dark:text-slate-200">
+                  <td className="py-1.5 pr-2 font-semibold">{item.categoria}</td>
+                  <td className="py-1.5 pr-2">{simNao(item.tem)}</td>
+                  <td className="py-1.5 pr-2 break-words">{item.marcas || '—'}</td>
+                  <td className="py-1.5">{item.tem ? simNao(item.concorrentes) : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onClose }) => {
   const queryClient = useQueryClient();
@@ -79,7 +148,13 @@ export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onCl
 
   const auditoria = loja?.auditoria;
   const marcasCoca = Array.isArray(auditoria?.marcasCocaPresentes) ? auditoria.marcasCocaPresentes : [];
-  const mapaBebidas = Array.isArray(auditoria?.mapaBebidas) ? auditoria.mapaBebidas : [];
+  const geladeiras: Geladeira[] = Array.isArray(auditoria?.geladeiras) ? auditoria.geladeiras : [];
+  // Com mais de uma geladeira, a legenda da foto diz de qual é
+  const rotuloFoto = (tipo: string) => {
+    const label = metaTipoFoto(tipo)?.label || tipo;
+    const { geladeira } = lerTipoFoto(tipo);
+    return geladeira && geladeiras.length > 1 ? `${label} · Geladeira ${geladeira}` : label;
+  };
   const isOperante = loja?.status === STATUS_LOJA.CONCLUIDA;
 
   return (
@@ -205,101 +280,38 @@ export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onCl
                   <div className="space-y-4">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
                       <span>1. Geladeiras & Merchandising</span>
+                      {geladeiras.length > 0 && (
+                        <span className="normal-case tracking-normal font-semibold text-[11px] px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/50">
+                          {geladeiras.length} {geladeiras.length === 1 ? 'geladeira' : 'geladeiras'}
+                        </span>
+                      )}
                     </h4>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-2.5 text-xs">
-                      <div className="bg-slate-50 dark:bg-[#0B0F19]/40 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
-                        <div className="text-[11px] text-slate-500">Possui Geladeira?</div>
-                        <div className="font-bold text-slate-900 dark:text-slate-100 mt-0.5 break-words">
-                          {simNao(auditoria?.existeGeladeira)}
-                        </div>
-                      </div>
-                      <div className="bg-slate-50 dark:bg-[#0B0F19]/40 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
-                        <div className="text-[11px] text-slate-500">Identificação Visual</div>
-                        <div className="font-bold text-slate-900 dark:text-slate-100 mt-0.5 break-words">
-                          {auditoria?.marcaVisualGeladeira || '—'}
-                        </div>
-                      </div>
-                      <div className="bg-slate-50 dark:bg-[#0B0F19]/40 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
-                        <div className="text-[11px] text-slate-500">Aparenta Pertencer a</div>
-                        <div className="font-bold text-slate-900 dark:text-slate-100 mt-0.5 break-words">
-                          {auditoria?.posseGeladeira || '—'}
-                        </div>
-                      </div>
-                      <div className="bg-slate-50 dark:bg-[#0B0F19]/40 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
-                        <div className="text-[11px] text-slate-500">Organização</div>
-                        <div className="font-bold text-slate-900 dark:text-slate-100 mt-0.5 break-words">
-                          {auditoria?.organizacaoGeladeira || '—'}
-                        </div>
-                      </div>
-                      <div className="bg-slate-50 dark:bg-[#0B0F19]/40 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
-                        <div className="text-[11px] text-slate-500">Abastecimento</div>
-                        <div className="font-bold text-slate-900 dark:text-slate-100 mt-0.5 break-words">
-                          {auditoria?.abastecimentoGeladeira || '—'}
-                        </div>
-                      </div>
-                      <div className="bg-slate-50 dark:bg-[#0B0F19]/40 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
-                        <div className="text-[11px] text-slate-500">Visibilidade das Marcas</div>
-                        <div className="font-bold text-slate-900 dark:text-slate-100 mt-0.5 break-words">
-                          {auditoria?.visibilidadeMarcas || '—'}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Mapa de bebidas (Guia §6) */}
-                    {mapaBebidas.length > 0 && (
-                      <div className="bg-slate-50 dark:bg-[#0B0F19]/40 p-3.5 rounded-xl border border-slate-200/60 dark:border-slate-800 text-xs overflow-x-auto">
-                        <div className="text-[11px] font-bold uppercase text-slate-500 mb-2">Mapa de Bebidas da Geladeira</div>
-                        <table className="w-full text-left">
-                          <thead>
-                            <tr className="text-[11px] text-slate-500">
-                              <th className="py-1 pr-2 font-semibold">Categoria</th>
-                              <th className="py-1 pr-2 font-semibold">Tem?</th>
-                              <th className="py-1 pr-2 font-semibold">Principais marcas</th>
-                              <th className="py-1 font-semibold">Concorrentes?</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {mapaBebidas.map((item) => (
-                              <tr key={item.categoria} className="border-t border-slate-200/60 dark:border-slate-800 text-slate-800 dark:text-slate-200">
-                                <td className="py-1.5 pr-2 font-semibold">{item.categoria}</td>
-                                <td className="py-1.5 pr-2">{simNao(item.tem)}</td>
-                                <td className="py-1.5 pr-2 break-words">{item.marcas || '—'}</td>
-                                <td className="py-1.5">{item.tem ? simNao(item.concorrentes) : '—'}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                    {auditoria?.existeGeladeira === false && (
+                      <div className="bg-slate-50 dark:bg-[#0B0F19]/40 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800 text-xs font-semibold">
+                        Loja sem geladeira de bebidas
                       </div>
                     )}
 
-                    {/* Presença de Marcas e Concorrentes */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                      <div className="bg-slate-50 dark:bg-[#0B0F19]/40 p-3.5 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-2">
-                        <div className="font-bold text-slate-800 dark:text-slate-200 flex items-center justify-between">
-                          <span>Presença Monster</span>
-                          <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
-                            {auditoria?.monsterPresente === true ? 'Presente na Loja' : auditoria?.monsterPresente === false ? 'Ausente' : '—'}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-slate-600 dark:text-slate-400">
-                          Na geladeira: <strong className="text-slate-900 dark:text-slate-100">{simNao(auditoria?.monsterNaGeladeira)}</strong>
-                        </div>
-                      </div>
+                    {geladeiras.map((g) => (
+                      <GeladeiraDetalhe key={g.ordem} g={g} unica={geladeiras.length === 1} />
+                    ))}
 
-                      <div className="bg-slate-50 dark:bg-[#0B0F19]/40 p-3.5 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-2">
-                        <div className="font-bold text-slate-800 dark:text-slate-200 flex items-center justify-between">
-                          <span>Concorrentes Misturados</span>
-                          <span className={`text-[11px] font-semibold ${auditoria?.concorrentesMisturados ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400'}`}>
-                            {auditoria?.concorrentesMisturados ? 'Sim (Detectado)' : 'Não'}
-                          </span>
-                        </div>
-                        {auditoria?.concorrentesDetalhes && (
-                          <div className="text-[11px] text-slate-600 dark:text-slate-400 italic break-words">
-                            "{auditoria.concorrentesDetalhes}"
-                          </div>
-                        )}
+                    <div className="bg-slate-50 dark:bg-[#0B0F19]/40 p-3.5 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-2 text-xs">
+                      <div className="font-bold text-slate-800 dark:text-slate-200 flex items-center justify-between">
+                        <span>Presença Monster</span>
+                        <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                          {auditoria?.monsterPresente === true ? 'Presente na Loja' : auditoria?.monsterPresente === false ? 'Ausente' : '—'}
+                        </span>
                       </div>
+                      {geladeiras.length > 0 && (
+                        <div className="text-[11px] text-slate-600 dark:text-slate-400">
+                          Em geladeira:{' '}
+                          <strong className="text-slate-900 dark:text-slate-100">
+                            {geladeiras.filter((g) => g.monsterPresente).map((g) => `Geladeira ${g.ordem}`).join(', ') || 'Nenhuma'}
+                          </strong>
+                        </div>
+                      )}
                     </div>
 
                     {/* Marcas Coca-Cola Presentes */}
@@ -415,8 +427,7 @@ export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onCl
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
                       {auditoria.fotos.map((foto: AuditoriaFoto) => {
-                        const meta = TIPOS_FOTO.find((t) => t.id === foto.tipo);
-                        const label = meta ? meta.label : foto.tipo;
+                        const label = rotuloFoto(foto.tipo);
                         const sizeKb = foto.tamanhoBytes ? Math.round(foto.tamanhoBytes / 1024) : null;
 
                         return (
@@ -557,7 +568,7 @@ export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onCl
             {failedImages[activePhoto.id] ? (
               <div className="h-64 sm:h-96 w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-700 flex flex-col items-center justify-center p-6 text-center text-slate-300">
                 <Camera className="w-12 h-12 text-blue-400 mb-3" />
-                <span className="text-sm font-semibold">{TIPOS_FOTO.find((t) => t.id === activePhoto.tipo)?.label || activePhoto.tipo}</span>
+                <span className="text-sm font-semibold">{rotuloFoto(activePhoto.tipo)}</span>
                 <span className="text-xs text-slate-400 mt-1">Visualização offline / Armazenado no servidor</span>
               </div>
             ) : (
@@ -571,7 +582,7 @@ export const AuditDetailModal: React.FC<AuditDetailModalProps> = ({ lojaId, onCl
 
             <div className="mt-3 sm:mt-4 flex flex-wrap items-center justify-center gap-2 sm:gap-3 text-white text-xs max-w-full px-2">
               <span className="font-semibold text-center w-full sm:w-auto px-2 py-0.5">
-                {TIPOS_FOTO.find((t) => t.id === activePhoto.tipo)?.label || activePhoto.tipo}
+                {rotuloFoto(activePhoto.tipo)}
               </span>
 
               {activePhoto.driveUrl && (

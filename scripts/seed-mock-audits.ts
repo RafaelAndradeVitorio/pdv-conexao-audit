@@ -40,6 +40,7 @@ export async function seedMockAudits() {
 
   // Limpa auditorias anteriores se houver
   await prisma.foto.deleteMany();
+  await prisma.geladeira.deleteMany();
   await prisma.auditoria.deleteMany();
   await prisma.loja.updateMany({
     data: {
@@ -94,21 +95,46 @@ export async function seedMockAudits() {
       const existeGeladeira = i % 10 !== 9; // 90% tem geladeira
       const marcasPresentes = marcasPool.slice(0, 3 + (i % 7));
 
-      const concorrentesMisturados = existeGeladeira && i % 3 === 0;
       const espacoLivreCaixa = i % 5 !== 4;
+      const monsterPresente = i % 6 !== 5;
+
+      // Algumas lojas com 2 ou 3 geladeiras, para testar o relatório por geladeira
+      const qtdGeladeiras = !existeGeladeira ? 0 : i % 7 === 0 ? 3 : i % 4 === 0 ? 2 : 1;
+      const geladeiras = Array.from({ length: qtdGeladeiras }, (_, n) => {
+        const k = i + n * 2;
+        const concorrentesMisturados = k % 3 === 0;
+        return {
+          ordem: n + 1,
+          identificacao: qtdGeladeiras > 1 ? ['Vertical ao lado do caixa', 'Horizontal no balcão', 'Fundo da loja'][n] : null,
+          marcaVisual: MARCA_VISUAL_GELADEIRA[k % MARCA_VISUAL_GELADEIRA.length],
+          posse: POSSE_GELADEIRA[k % POSSE_GELADEIRA.length],
+          monsterPresente: monsterPresente ? k % 4 !== 0 : false,
+          mapaBebidas: JSON.stringify(
+            CATEGORIAS_BEBIDA.map((categoria, c) => {
+              const tem = (k + c) % 4 !== 3;
+              return { categoria, tem, marcas: tem ? '' : null, concorrentes: tem ? (k + c) % 3 === 0 : null };
+            })
+          ),
+          organizacao: ORGANIZACAO_GELADEIRA[k % 2],
+          abastecimento: ABASTECIMENTO_GELADEIRA[k % ABASTECIMENTO_GELADEIRA.length],
+          visibilidade: VISIBILIDADE_MARCAS[k % VISIBILIDADE_MARCAS.length],
+          concorrentesMisturados,
+          concorrentesDetalhes: concorrentesMisturados ? 'Pepsi 350ml e Guaraná Antarctica na 2ª prateleira' : null
+        };
+      });
 
       // Grava no disco as fotos exigidas pelas respostas
       const fotosParaCriar = [];
       const tiposFoto = fotosObrigatorias({
         inoperante: false,
         existeGeladeira,
-        concorrentesMisturados,
+        geladeiras,
         espacoLivreCaixa
       });
 
       for (const tipo of tiposFoto) {
         const timestamp = auditadaEm.getTime() + Math.floor(Math.random() * 5000);
-        const fileName = `foto_${tipo}_${timestamp}.webp`;
+        const fileName = `foto_${tipo.replace(/[^a-zA-Z0-9_-]/g, '_')}_${timestamp}.webp`;
         const filePath = path.join(lojaUploadDir, fileName);
         fs.writeFileSync(filePath, sampleWebpBuffer);
 
@@ -125,24 +151,10 @@ export async function seedMockAudits() {
           pesquisadorId: pesq.id,
           statusEntrada: 'Loja aberta e operando',
           existeGeladeira,
-          marcaVisualGeladeira: existeGeladeira ? MARCA_VISUAL_GELADEIRA[i % MARCA_VISUAL_GELADEIRA.length] : null,
-          posseGeladeira: existeGeladeira ? POSSE_GELADEIRA[i % POSSE_GELADEIRA.length] : null,
-          organizacaoGeladeira: existeGeladeira ? ORGANIZACAO_GELADEIRA[i % 2] : null,
-          abastecimentoGeladeira: existeGeladeira ? ABASTECIMENTO_GELADEIRA[i % ABASTECIMENTO_GELADEIRA.length] : null,
-          visibilidadeMarcas: existeGeladeira ? VISIBILIDADE_MARCAS[i % VISIBILIDADE_MARCAS.length] : null,
-          monsterPresente: i % 6 !== 5,
-          monsterNaGeladeira: existeGeladeira && i % 6 !== 5 ? i % 4 !== 0 : null,
+          monsterPresente,
+          monsterNaGeladeira: geladeiras.length ? geladeiras.some((g) => g.monsterPresente) : null,
           marcasCocaPresentes: JSON.stringify(marcasPresentes),
-          mapaBebidas: existeGeladeira
-            ? JSON.stringify(
-                CATEGORIAS_BEBIDA.map((categoria, c) => {
-                  const tem = (i + c) % 4 !== 3;
-                  return { categoria, tem, marcas: tem ? '' : null, concorrentes: tem ? (i + c) % 3 === 0 : null };
-                })
-              )
-            : null,
-          concorrentesMisturados: existeGeladeira ? concorrentesMisturados : null,
-          concorrentesDetalhes: concorrentesMisturados ? 'Pepsi 350ml e Guaraná Antarctica na 2ª prateleira' : null,
+          geladeiras: { create: geladeiras },
           espacoLivreCaixa,
           espacoLadoTamanho: espacoLivreCaixa ? 'Balcão direito, aprox. 50cm livres ao lado da maquininha' : null,
           boaVisibilidadeCaixa: espacoLivreCaixa ? i % 2 === 0 : null,

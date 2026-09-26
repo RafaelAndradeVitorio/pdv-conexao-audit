@@ -1,7 +1,13 @@
 import React, { useState } from 'react';
 import { Info, Loader2 } from 'lucide-react';
 import { useResultados } from '../hooks/useAuditData';
-import { Contagem, PESOS_NOTA, ResultadosLevantamento as Resultados } from '../../shared/analytics';
+import {
+  Contagem,
+  GeladeiraRef,
+  PESOS_NOTA,
+  ResultadosLevantamento as Resultados,
+  rotuloGeladeira
+} from '../../shared/analytics';
 
 const card = 'bg-white dark:bg-[#131B2B] border border-slate-200/90 dark:border-slate-800 rounded-3xl p-5 shadow-sm';
 const subtitulo = 'text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2';
@@ -29,8 +35,16 @@ const Pergunta: React.FC<{ n: number; titulo: string; resposta?: React.ReactNode
   </section>
 );
 
-/** Barras horizontais de uma série: contagem de lojas por opção do guia */
-const BarList: React.FC<{ titulo: string; itens: Contagem; total: number }> = ({ titulo, itens, total }) => {
+/** Só identifica a geladeira quando a loja tem mais de uma */
+const geladeiraDaLinha = (l: GeladeiraRef) => (l.totalGeladeiras > 1 ? rotuloGeladeira(l) : null);
+
+/** Barras horizontais de uma série: contagem de lojas (ou geladeiras) por opção do guia */
+const BarList: React.FC<{ titulo: string; itens: Contagem; total: number; unidade?: string }> = ({
+  titulo,
+  itens,
+  total,
+  unidade = 'lojas'
+}) => {
   const max = Math.max(1, ...itens.map((i) => i.qtd));
   return (
     <div>
@@ -40,7 +54,7 @@ const BarList: React.FC<{ titulo: string; itens: Contagem; total: number }> = ({
           <li
             key={i.rotulo}
             className="grid grid-cols-[minmax(0,9rem)_1fr_auto] sm:grid-cols-[minmax(0,13rem)_1fr_auto] items-center gap-2 text-xs"
-            title={`${i.rotulo}: ${i.qtd} de ${total} lojas (${pct(i.qtd, total)}%)`}
+            title={`${i.rotulo}: ${i.qtd} de ${total} ${unidade} (${pct(i.qtd, total)}%)`}
           >
             <span className="truncate text-slate-700 dark:text-slate-300">{i.rotulo}</span>
             <span className="h-2 bg-slate-100 dark:bg-[#0B0F19] rounded-full overflow-hidden">
@@ -66,11 +80,19 @@ const Numero: React.FC<{ valor: React.ReactNode; rotulo: string }> = ({ valor, r
   </div>
 );
 
-const NomeLoja: React.FC<{ nome: string; rede: string; onClick: () => void }> = ({ nome, rede, onClick }) => (
+const NomeLoja: React.FC<{ nome: string; rede: string; geladeira?: string | null; onClick: () => void }> = ({
+  nome,
+  rede,
+  geladeira,
+  onClick
+}) => (
   <button type="button" onClick={onClick} className="text-left min-w-0 group">
     <span className="block font-semibold text-slate-900 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 break-words">
       {nome}
     </span>
+    {geladeira && (
+      <span className="block text-[11px] font-semibold text-blue-700 dark:text-blue-300 break-words">{geladeira}</span>
+    )}
     <span className="block text-[11px] text-slate-500 dark:text-slate-400">{rede}</span>
   </button>
 );
@@ -85,9 +107,7 @@ const Conteudo: React.FC<{ r: Resultados; onSelectLoja: (id: string) => void }> 
   const [verTodoRanking, setVerTodoRanking] = useState(false);
   const g = r.geladeiras;
   const comNota = r.ranking.filter((l) => l.nota !== null);
-  const comOportunidades = [...r.ranking]
-    .filter((l) => l.oportunidades.length > 0)
-    .sort((a, b) => b.oportunidades.length - a.oportunidades.length || (a.nota ?? 101) - (b.nota ?? 101));
+  const comOportunidades = r.oportunidades;
   const rankingVisivel = verTodoRanking ? comNota : comNota.slice(0, 10);
 
   return (
@@ -96,20 +116,20 @@ const Conteudo: React.FC<{ r: Resultados; onSelectLoja: (id: string) => void }> 
         <Numero valor={`${r.lojasVisitadas}/${r.totalLojas}`} rotulo="lojas visitadas" />
         <Numero valor={r.lojasAbertas} rotulo="abertas e avaliadas" />
         <Numero valor={r.lojasInoperantes} rotulo="fechadas / em reforma / outro" />
-        <Numero valor={g.comGeladeira} rotulo="com geladeira de bebidas" />
+        <Numero valor={g.total} rotulo={`geladeiras em ${g.comGeladeira} lojas`} />
       </div>
 
       <Pergunta
         n={1}
         titulo="Como estão as geladeiras?"
-        resposta={`${g.comGeladeira} de ${r.lojasAbertas} lojas abertas têm geladeira de bebidas; ${g.semGeladeira} não têm.`}
+        resposta={`${g.comGeladeira} de ${r.lojasAbertas} lojas abertas têm geladeira de bebidas (${g.total} geladeiras avaliadas); ${g.semGeladeira} não têm. Os gráficos contam geladeiras.`}
       >
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <BarList titulo="Aparenta pertencer a" itens={g.porPosse} total={g.comGeladeira} />
-          <BarList titulo="Identificação visual" itens={g.porMarcaVisual} total={g.comGeladeira} />
-          <BarList titulo="Abastecimento" itens={g.porAbastecimento} total={g.comGeladeira} />
-          <BarList titulo="Visibilidade das marcas" itens={g.porVisibilidade} total={g.comGeladeira} />
-          <BarList titulo="Organização" itens={g.porOrganizacao} total={g.comGeladeira} />
+          <BarList titulo="Aparenta pertencer a" itens={g.porPosse} total={g.total} unidade="geladeiras" />
+          <BarList titulo="Identificação visual" itens={g.porMarcaVisual} total={g.total} unidade="geladeiras" />
+          <BarList titulo="Abastecimento" itens={g.porAbastecimento} total={g.total} unidade="geladeiras" />
+          <BarList titulo="Visibilidade das marcas" itens={g.porVisibilidade} total={g.total} unidade="geladeiras" />
+          <BarList titulo="Organização" itens={g.porOrganizacao} total={g.total} unidade="geladeiras" />
         </div>
       </Pergunta>
 
@@ -117,7 +137,7 @@ const Conteudo: React.FC<{ r: Resultados; onSelectLoja: (id: string) => void }> 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <BarList titulo="Marcas Coca-Cola (lojas abertas)" itens={r.marcas.cocaCola} total={r.lojasAbertas} />
           <div>
-            <div className={subtitulo}>Categorias nas geladeiras</div>
+            <div className={subtitulo}>Categorias nas {g.total} geladeiras</div>
             <table className="w-full text-xs">
               <thead>
                 <tr className="text-left text-[11px] text-slate-500 dark:text-slate-400">
@@ -131,7 +151,7 @@ const Conteudo: React.FC<{ r: Resultados; onSelectLoja: (id: string) => void }> 
                   <tr key={c.categoria} className="border-t border-slate-100 dark:border-slate-800 text-slate-800 dark:text-slate-200">
                     <td className="py-1.5 pr-2 font-medium">{c.categoria}</td>
                     <td className="py-1.5 pr-2 text-right font-mono tabular-nums">
-                      {c.tem} <span className="text-slate-400">({pct(c.tem, g.comGeladeira)}%)</span>
+                      {c.tem} <span className="text-slate-400">({pct(c.tem, g.total)}%)</span>
                     </td>
                     <td className="py-1.5 text-right font-mono tabular-nums">
                       {c.comConcorrente} <span className="text-slate-400">({pct(c.comConcorrente, c.tem)}%)</span>
@@ -152,8 +172,8 @@ const Conteudo: React.FC<{ r: Resultados; onSelectLoja: (id: string) => void }> 
         {r.concorrenciaFemsa.lojas.length > 0 ? (
           <ul className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
             {r.concorrenciaFemsa.lojas.map((l) => (
-              <li key={l.lojaId} className="py-2 grid grid-cols-1 sm:grid-cols-[minmax(0,16rem)_1fr] gap-1 sm:gap-3">
-                <NomeLoja nome={l.nome} rede={l.rede} onClick={() => onSelectLoja(l.lojaId)} />
+              <li key={`${l.lojaId}-${l.geladeira}`} className="py-2 grid grid-cols-1 sm:grid-cols-[minmax(0,16rem)_1fr] gap-1 sm:gap-3">
+                <NomeLoja nome={l.nome} rede={l.rede} geladeira={geladeiraDaLinha(l)} onClick={() => onSelectLoja(l.lojaId)} />
                 <span className="text-slate-600 dark:text-slate-300 break-words">{l.detalhes || 'Sem detalhes registrados'}</span>
               </li>
             ))}
@@ -176,7 +196,13 @@ const Conteudo: React.FC<{ r: Resultados; onSelectLoja: (id: string) => void }> 
                 <li key={l.lojaId} className="py-2 grid grid-cols-1 sm:grid-cols-[minmax(0,16rem)_1fr] gap-1.5 sm:gap-3">
                   <NomeLoja nome={l.nome} rede={l.rede} onClick={() => onSelectLoja(l.lojaId)} />
                   <div className="flex flex-wrap gap-1.5 content-start">
-                    <Chip>{l.naGeladeira ? 'Dentro da geladeira' : 'Fora da geladeira'}</Chip>
+                    <Chip>
+                      {!l.naGeladeira
+                        ? 'Fora da geladeira'
+                        : l.geladeirasComMonster > 1
+                        ? `Em ${l.geladeirasComMonster} geladeiras`
+                        : 'Dentro da geladeira'}
+                    </Chip>
                     {l.posseGeladeira && <Chip>Geladeira: {l.posseGeladeira}</Chip>}
                     {l.visibilidade && <Chip>{l.visibilidade}</Chip>}
                   </div>
@@ -189,7 +215,7 @@ const Conteudo: React.FC<{ r: Resultados; onSelectLoja: (id: string) => void }> 
       <Pergunta
         n={5}
         titulo="Quais lojas apresentam melhor exposição?"
-        resposta={`Ranking das ${comNota.length} lojas com geladeira avaliada, pela nota de exposição (0 a 100).`}
+        resposta={`Ranking das ${comNota.length} geladeiras avaliadas, pela nota de exposição (0 a 100). Lojas com várias geladeiras aparecem uma vez para cada.`}
       >
         <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 text-[11px] text-amber-900 dark:text-amber-200 flex gap-2">
           <Info className="w-4 h-4 shrink-0 mt-0.5" />
@@ -202,10 +228,13 @@ const Conteudo: React.FC<{ r: Resultados; onSelectLoja: (id: string) => void }> 
         </div>
         <ol className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
           {rankingVisivel.map((l, i) => (
-            <li key={l.lojaId} className="py-2 grid grid-cols-[1.5rem_minmax(0,1fr)_6.5rem] sm:grid-cols-[1.5rem_minmax(0,1fr)_12rem] gap-2 items-start">
+            <li
+              key={`${l.lojaId}-${l.geladeira}`}
+              className="py-2 grid grid-cols-[1.5rem_minmax(0,1fr)_6.5rem] sm:grid-cols-[1.5rem_minmax(0,1fr)_12rem] gap-2 items-start"
+            >
               <span className="font-mono text-slate-500 pt-0.5">{i + 1}</span>
               <div className="min-w-0">
-                <NomeLoja nome={l.nome} rede={l.rede} onClick={() => onSelectLoja(l.lojaId)} />
+                <NomeLoja nome={l.nome} rede={l.rede} geladeira={geladeiraDaLinha(l)} onClick={() => onSelectLoja(l.lojaId)} />
                 <div className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
                   {[l.organizacao, l.abastecimento, l.visibilidade].filter(Boolean).join(' · ')}
                 </div>
@@ -225,7 +254,7 @@ const Conteudo: React.FC<{ r: Resultados; onSelectLoja: (id: string) => void }> 
             onClick={() => setVerTodoRanking((v) => !v)}
             className="text-xs font-semibold text-blue-700 dark:text-blue-300 underline"
           >
-            {verTodoRanking ? 'Mostrar só as 10 melhores' : `Ver ranking completo (${comNota.length} lojas)`}
+            {verTodoRanking ? 'Mostrar só as 10 melhores' : `Ver ranking completo (${comNota.length} geladeiras)`}
           </button>
         )}
       </Pergunta>

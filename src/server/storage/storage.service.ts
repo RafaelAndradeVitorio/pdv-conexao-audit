@@ -36,7 +36,9 @@ export class StorageService {
     await mkdir(folderPath, { recursive: true });
 
     const timestamp = Date.now();
-    const fileName = `foto_${tipo}_${timestamp}.${extension}`;
+    // O tipo vem do cliente e pode ter o número da geladeira (foto_geladeira:2): ":" não vale no Windows
+    const tipoArquivo = tipo.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const fileName = `foto_${tipoArquivo}_${timestamp}.${extension}`;
     const filePath = path.join(folderPath, fileName);
 
     await writeFile(filePath, buffer);

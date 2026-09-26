@@ -47,6 +47,22 @@ export interface AuditoriaFoto {
   createdAt?: string;
 }
 
+/** Uma geladeira da loja (a loja pode ter várias, cada uma com seu relatório) */
+export interface Geladeira {
+  id?: string;
+  ordem: number;
+  identificacao?: string | null;
+  marcaVisual?: string | null;
+  posse?: string | null;
+  monsterPresente?: boolean | null;
+  mapaBebidas?: MapaBebidaItem[];
+  organizacao?: string | null;
+  abastecimento?: string | null;
+  visibilidade?: string | null;
+  concorrentesMisturados?: boolean | null;
+  concorrentesDetalhes?: string | null;
+}
+
 export interface Auditoria {
   id: string;
   lojaId: string;
@@ -56,19 +72,12 @@ export interface Auditoria {
   
   // Checklist (quando aberta)
   existeGeladeira?: boolean | null;
-  marcaVisualGeladeira?: string | null;
-  posseGeladeira?: string | null;
-  organizacaoGeladeira?: string | null;
-  abastecimentoGeladeira?: string | null;
-  visibilidadeMarcas?: string | null;
+  geladeiras?: Geladeira[];
 
   monsterPresente?: boolean | null;
+  /** Derivado: alguma geladeira tem Monster */
   monsterNaGeladeira?: boolean | null;
   marcasCocaPresentes?: string[] | string | null; // JSON no banco
-  mapaBebidas?: MapaBebidaItem[] | string | null; // JSON no banco
-
-  concorrentesMisturados?: boolean | null;
-  concorrentesDetalhes?: string | null;
 
   espacoLivreCaixa?: boolean | null;
   espacoLadoTamanho?: string | null;

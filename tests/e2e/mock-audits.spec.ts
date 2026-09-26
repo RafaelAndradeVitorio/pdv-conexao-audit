@@ -56,7 +56,7 @@ test.describe('E2E - Mock de Dados e Validação de Fluxos Completos', () => {
     await expect(page.locator('text=não é permitido reenviar dados')).toBeVisible();
 
     // Garante que o checklist NÃO foi exibido
-    await expect(page.locator('text=Geladeira de Bebidas')).not.toBeVisible();
+    await expect(page.locator('text=Geladeiras de Bebidas')).not.toBeVisible();
 
     // 4. Troca para uma loja PENDENTE (Ex: Estação Giovanni Gronchi - loja-56)
     await page.locator('button:has-text("Trocar Loja")').click();
@@ -69,10 +69,10 @@ test.describe('E2E - Mock de Dados e Validação de Fluxos Completos', () => {
     await expect(page.locator('text=Loja liberada para auditoria de campo')).toBeVisible();
     await expect(page.locator('text=Registro Inicial')).toBeVisible();
     await page.locator('button:has-text("Loja aberta e operando")').click();
-    await expect(page.getByText('Geladeira de Bebidas', { exact: true })).toBeVisible();
+    await expect(page.getByText('Geladeiras de Bebidas', { exact: true })).toBeVisible();
     await expect(page.locator('text=Presença de Monster')).toBeVisible();
     await expect(page.getByText('Caixa e Entorno – Display')).toBeVisible();
-    await expect(page.locator('text=Fotos Obrigatórias')).toBeVisible();
+    await expect(page.locator('text=Fotos da Loja')).toBeVisible();
   });
 
   test('E2E Exportações: Download de Relatório CSV e Arquivo ZIP', async ({ request }) => {

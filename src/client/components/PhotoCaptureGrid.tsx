@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { compressAuditPhoto } from '../utils/compression';
 import { Camera, RefreshCw, CheckCircle, Loader2, Sparkles, Image as ImageIcon, Trash2 } from 'lucide-react';
-import { TIPOS_FOTO } from '../../shared/constants';
+import { MetaTipoFoto, metaTipoFoto } from '../../shared/constants';
 import { InAppCamera } from './InAppCamera';
 
 export interface PhotoState {
@@ -23,6 +23,10 @@ interface Props {
   /** Foto comprimida e guardada no aparelho; o envio ao servidor é feito pela fila de envio */
   onPhotoCaptured: (tipo: string, data: { size: number; previewUrl: string }) => void;
   onPhotoReset: (tipo: string) => void;
+  /** Título do bloco (padrão: "Fotos Obrigatórias (N)") */
+  titulo?: string;
+  /** Orientação abaixo do título (padrão: orientação geral das fotos da loja) */
+  orientacao?: string;
 }
 
 export const PhotoCaptureGrid: React.FC<Props> = ({
@@ -30,14 +34,19 @@ export const PhotoCaptureGrid: React.FC<Props> = ({
   tipos,
   photos,
   onPhotoCaptured,
-  onPhotoReset
+  onPhotoReset,
+  titulo,
+  orientacao
 }) => {
   const [comprimindo, setComprimindo] = useState<string | null>(null);
   /** Tipo de foto com a câmera do app aberta */
   const [cameraTipo, setCameraTipo] = useState<string | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  const listToRender = TIPOS_FOTO.filter((f) => tipos.includes(f.id));
+  // O tipo pode vir com o número da geladeira (foto_geladeira:2): o card usa o tipo completo como chave
+  const listToRender = tipos
+    .map((tipo) => ({ tipo, meta: metaTipoFoto(tipo) }))
+    .filter((t): t is { tipo: string; meta: MetaTipoFoto } => !!t.meta);
 
   const processFile = async (tipo: string, file: File) => {
     try {
@@ -78,7 +87,7 @@ export const PhotoCaptureGrid: React.FC<Props> = ({
     input.click();
   };
 
-  const cameraTipoObj = cameraTipo ? TIPOS_FOTO.find((f) => f.id === cameraTipo) : undefined;
+  const cameraTipoObj = cameraTipo ? metaTipoFoto(cameraTipo) : undefined;
 
   return (
     <div className="space-y-3.5">
@@ -87,7 +96,9 @@ export const PhotoCaptureGrid: React.FC<Props> = ({
           <div className="h-7 w-7 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
             <Camera className="w-4 h-4" />
           </div>
-          <span className="leading-tight">{isInoperante ? 'Registro Fotográfico (Fachada Obrigatória)' : `Fotos Obrigatórias (${listToRender.length})`}</span>
+          <span className="leading-tight">
+            {titulo ?? (isInoperante ? 'Registro Fotográfico (Fachada Obrigatória)' : `Fotos Obrigatórias (${listToRender.length})`)}
+          </span>
         </label>
         <span className="text-[11px] text-blue-700 dark:text-blue-300 flex items-center gap-1 font-semibold bg-blue-50 dark:bg-blue-950/40 px-2.5 py-0.5 rounded-full border border-blue-200/60 dark:border-blue-800/40 shrink-0">
           <Sparkles className="w-3 h-3 text-blue-600 dark:text-blue-400" /> Compressão WebP Ativa
@@ -95,21 +106,25 @@ export const PhotoCaptureGrid: React.FC<Props> = ({
       </div>
 
       <p className="text-[11px] text-slate-500 dark:text-slate-400">
-        Priorize equipamentos, produtos e espaços. Não fotografe clientes de forma identificável.
-        {!isInoperante && ' As fotos de geladeira, concorrentes e espaço do display aparecem conforme as respostas acima.'}
+        {orientacao ?? (
+          <>
+            Priorize equipamentos, produtos e espaços. Não fotografe clientes de forma identificável.
+            {!isInoperante && ' As fotos de cada geladeira ficam dentro do bloco dela; a do espaço do display aparece conforme as respostas acima.'}
+          </>
+        )}
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-        {listToRender.map((tipoObj, index) => {
-          const photoState = photos[tipoObj.id];
+        {listToRender.map(({ tipo, meta: tipoObj }, index) => {
+          const photoState = photos[tipo];
           const hasPhoto = !!photoState?.url || !!photoState?.previewUrl;
-          const isUploading = comprimindo === tipoObj.id;
+          const isUploading = comprimindo === tipo;
           const isDisplayOpportunity = tipoObj.id === 'foto_caixa';
 
           return (
             // Android M3 Outlined Card
             <div
-              key={tipoObj.id}
+              key={tipo}
               className={`relative border rounded-3xl p-3.5 flex flex-col justify-between transition-all shadow-sm ${
                 hasPhoto
                   ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-400 dark:border-emerald-700/60'
@@ -167,11 +182,11 @@ export const PhotoCaptureGrid: React.FC<Props> = ({
               {/* Ações de Tirar Foto / Refazer (Android M3 Buttons) */}
               <div className="mt-3 flex items-center gap-2">
                 <input
-                  ref={(el) => { fileInputRefs.current[tipoObj.id] = el; }}
+                  ref={(el) => { fileInputRefs.current[tipo] = el; }}
                   type="file"
                   accept="image/*"
                   className="hidden"
-                  onChange={(e) => handleFileChange(tipoObj.id, e)}
+                  onChange={(e) => handleFileChange(tipo, e)}
                   disabled={isUploading}
                 />
 
@@ -180,7 +195,7 @@ export const PhotoCaptureGrid: React.FC<Props> = ({
                     {/* M3 Filled Button (pill shape, h-11) */}
                     <button
                       type="button"
-                      onClick={() => setCameraTipo(tipoObj.id)}
+                      onClick={() => setCameraTipo(tipo)}
                       disabled={isUploading}
                       className="flex-1 h-11 px-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-medium text-xs rounded-full flex items-center justify-center gap-2 touch-manipulation transition shadow-sm whitespace-nowrap"
                     >
@@ -190,7 +205,7 @@ export const PhotoCaptureGrid: React.FC<Props> = ({
                     {/* M3 Tonal Button */}
                     <button
                       type="button"
-                      onClick={() => fileInputRefs.current[tipoObj.id]?.click()}
+                      onClick={() => fileInputRefs.current[tipo]?.click()}
                       disabled={isUploading}
                       className="flex-1 h-11 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium text-xs rounded-full flex items-center justify-center gap-2 touch-manipulation transition whitespace-nowrap"
                     >
@@ -203,7 +218,7 @@ export const PhotoCaptureGrid: React.FC<Props> = ({
                     {/* M3 Tonal Buttons */}
                     <button
                       type="button"
-                      onClick={() => setCameraTipo(tipoObj.id)}
+                      onClick={() => setCameraTipo(tipo)}
                       disabled={isUploading}
                       className="flex-1 h-9 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs rounded-full font-medium flex items-center justify-center gap-1.5 transition touch-manipulation whitespace-nowrap"
                     >
@@ -211,7 +226,7 @@ export const PhotoCaptureGrid: React.FC<Props> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => fileInputRefs.current[tipoObj.id]?.click()}
+                      onClick={() => fileInputRefs.current[tipo]?.click()}
                       disabled={isUploading}
                       className="h-9 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs rounded-full font-medium flex items-center justify-center gap-1.5 transition touch-manipulation shrink-0 whitespace-nowrap"
                     >
@@ -220,7 +235,7 @@ export const PhotoCaptureGrid: React.FC<Props> = ({
                     {/* M3 Error Outlined Button */}
                     <button
                       type="button"
-                      onClick={() => onPhotoReset(tipoObj.id)}
+                      onClick={() => onPhotoReset(tipo)}
                       disabled={isUploading}
                       className="h-9 px-3 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 border border-rose-200/80 dark:border-rose-800/40 text-xs rounded-full font-medium transition flex items-center gap-1 touch-manipulation shrink-0 whitespace-nowrap"
                     >

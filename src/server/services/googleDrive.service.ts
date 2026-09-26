@@ -3,7 +3,7 @@ import path from 'path';
 import { google, drive_v3 } from 'googleapis';
 import { prisma } from '../db';
 import { storageService } from '../storage/storage.service';
-import { NOME_ARQUIVO_FOTO } from '../../shared/constants';
+import { nomeArquivoFoto } from '../../shared/constants';
 
 export interface DriveUploadResult {
   fileId: string;
@@ -340,7 +340,7 @@ export class GoogleDriveService {
 
         const relative = foto.url.replace(/^\/?uploads\//, '');
         const fullDiskPath = path.join(baseDir, relative);
-        const prefix = NOME_ARQUIVO_FOTO[foto.tipo] || foto.tipo;
+        const prefix = nomeArquivoFoto(foto.tipo);
         const fileName = `${prefix}.webp`;
 
         this.enqueuePhotoUpload(foto.id, auditoria.loja.nome, fullDiskPath, fileName);
@@ -434,7 +434,7 @@ export class GoogleDriveService {
     for (const foto of fotosPendentes) {
       const relative = foto.url.replace(/^\/?uploads\//, '');
       const fullDiskPath = path.join(baseDir, relative);
-      const prefix = NOME_ARQUIVO_FOTO[foto.tipo] || foto.tipo;
+      const prefix = nomeArquivoFoto(foto.tipo);
       const fileName = `${prefix}.webp`;
 
       this.enqueuePhotoUpload(foto.id, foto.auditoria.loja.nome, fullDiskPath, fileName);

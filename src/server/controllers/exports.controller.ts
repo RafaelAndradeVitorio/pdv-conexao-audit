@@ -20,6 +20,21 @@ export async function exportarCsv(req: Request, res: Response) {
   }
 }
 
+export async function exportarCsvGeladeiras(req: Request, res: Response) {
+  try {
+    const baseUrl = `${req.protocol}://${req.get('host') || 'localhost:3000'}`;
+    const csvContent = await exportService.generateGeladeirasCsv(baseUrl);
+    const filename = `relatorio_geladeiras_pdv_${new Date().toISOString().slice(0, 10)}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.status(200).send(csvContent);
+  } catch (error) {
+    console.error('Erro ao exportar CSV de geladeiras:', error);
+    return res.status(500).json({ error: 'Erro ao gerar relatório de geladeiras' });
+  }
+}
+
 export async function exportarZip(req: Request, res: Response) {
   try {
     const filename = `fotos_auditorias_pdv_${new Date().toISOString().slice(0, 10)}.zip`;

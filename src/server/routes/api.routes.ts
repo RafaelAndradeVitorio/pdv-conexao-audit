@@ -22,7 +22,7 @@ import {
   obterResultados,
   obterAuditoriaPorId
 } from '../controllers/auditorias.controller';
-import { exportarCsv, exportarZip } from '../controllers/exports.controller';
+import { exportarCsv, exportarCsvGeladeiras, exportarZip } from '../controllers/exports.controller';
 import { obterStatusDrive, sincronizarFotosDrive } from '../controllers/drive.controller';
 import { exigirCoordenador, obterSessao, entrar, sair } from '../auth/coordenador';
 
@@ -66,6 +66,7 @@ apiRouter.get('/auditorias/:id', exigirCoordenador, obterAuditoriaPorId);
 
 // Exportações do Coordenador
 apiRouter.get('/export/csv', exigirCoordenador, exportarCsv);
+apiRouter.get('/export/csv-geladeiras', exigirCoordenador, exportarCsvGeladeiras);
 apiRouter.get('/export/zip', exigirCoordenador, exportarZip);
 
 // Google Drive Integration

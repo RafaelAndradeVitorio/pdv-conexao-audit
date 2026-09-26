@@ -1,5 +1,6 @@
 import { prisma } from '../db';
 import { REAL_RESEARCHERS, REAL_STORES } from './realData';
+import { backfillGeladeiras } from '../services/geladeiras';
 
 /**
  * Garante que ao iniciar a aplicação em qualquer ambiente (local ou nuvem Railway),
@@ -60,5 +61,11 @@ export async function bootstrapDatabase(): Promise<void> {
     }
   } catch (error) {
     console.error('[Bootstrap] Aviso: Falha ao executar bootstrap inicial do banco:', error);
+  }
+
+  try {
+    await backfillGeladeiras();
+  } catch (error) {
+    console.error('[Bootstrap] Aviso: Falha ao converter auditorias antigas para geladeiras:', error);
   }
 }

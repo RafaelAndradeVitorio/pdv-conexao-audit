@@ -171,28 +171,73 @@ export const TIPOS_FOTO = [
 
 export type TipoFotoId = (typeof TIPOS_FOTO)[number]['id'];
 export type CondicaoFoto = (typeof TIPOS_FOTO)[number]['quando'];
+export type MetaTipoFoto = (typeof TIPOS_FOTO)[number];
 
-export const NOME_ARQUIVO_FOTO: Record<string, string> = Object.fromEntries(
-  TIPOS_FOTO.map((t) => [t.id, t.arquivo])
-);
+/** Uma loja pode ter várias geladeiras; cada uma tem suas respostas e fotos */
+export const MAX_GELADEIRAS = 10;
+
+/** Fotos tiradas uma vez por geladeira (as demais são da loja) */
+export const FOTOS_DA_GELADEIRA = TIPOS_FOTO.filter((t) => t.quando === 'geladeira' || t.quando === 'concorrentes');
+const IDS_FOTOS_GELADEIRA = new Set<string>(FOTOS_DA_GELADEIRA.map((t) => t.id));
+
+/**
+ * Fotos de geladeira levam o número da geladeira no tipo: `foto_geladeira:2`.
+ * Tipos sem número (auditorias anteriores às várias geladeiras) são da geladeira 1.
+ */
+export const tipoFotoGeladeira = (base: string, geladeira: number) => `${base}:${geladeira}`;
+
+export function lerTipoFoto(tipo: string): { base: string; geladeira: number | null } {
+  const [base, n] = tipo.split(':');
+  if (!IDS_FOTOS_GELADEIRA.has(base)) return { base, geladeira: null };
+  const geladeira = Number(n);
+  return { base, geladeira: Number.isInteger(geladeira) && geladeira > 0 ? geladeira : 1 };
+}
+
+/** Mesma foto com ou sem o número da geladeira 1 viram a mesma chave */
+export const chaveTipoFoto = (tipo: string) => {
+  const { base, geladeira } = lerTipoFoto(tipo);
+  return geladeira ? tipoFotoGeladeira(base, geladeira) : base;
+};
+
+export const metaTipoFoto = (tipo: string): MetaTipoFoto | undefined =>
+  TIPOS_FOTO.find((t) => t.id === lerTipoFoto(tipo).base);
+
+/** Nome da foto no ZIP e no Google Drive; fotos de geladeira ganham " - G2" */
+export function nomeArquivoFoto(tipo: string): string {
+  const meta = metaTipoFoto(tipo);
+  if (!meta) return tipo;
+  const temNumero = tipo.includes(':');
+  return temNumero ? `${meta.arquivo} - G${lerTipoFoto(tipo).geladeira}` : meta.arquivo;
+}
 
 export interface ContextoFotos {
   inoperante: boolean;
   existeGeladeira?: boolean | null;
-  concorrentesMisturados?: boolean | null;
+  /** Uma entrada por geladeira, na ordem */
+  geladeiras?: { concorrentesMisturados?: boolean | null }[];
   espacoLivreCaixa?: boolean | null;
 }
 
-/** Tipos de foto obrigatórios dado o que foi respondido no checklist */
-export function fotosObrigatorias(ctx: ContextoFotos): TipoFotoId[] {
+/** Fotos exigidas de uma geladeira (tipos já com o número dela) */
+export function fotosDaGeladeira(numero: number, concorrentesMisturados?: boolean | null): string[] {
+  return FOTOS_DA_GELADEIRA.filter((t) => t.quando === 'geladeira' || concorrentesMisturados === true).map((t) =>
+    tipoFotoGeladeira(t.id, numero)
+  );
+}
+
+/** Fotos exigidas da loja em si (visão geral, caixa, display) */
+export function fotosDaLoja(ctx: ContextoFotos): string[] {
   if (ctx.inoperante) {
     return TIPOS_FOTO.filter((t) => t.obrigatoriaInoperante).map((t) => t.id);
   }
-  const atende: Record<CondicaoFoto, boolean> = {
-    sempre: true,
-    geladeira: ctx.existeGeladeira === true,
-    concorrentes: ctx.existeGeladeira === true && ctx.concorrentesMisturados === true,
-    espaco: ctx.espacoLivreCaixa === true
-  };
-  return TIPOS_FOTO.filter((t) => atende[t.quando]).map((t) => t.id);
+  return TIPOS_FOTO.filter((t) => t.quando === 'sempre' || (t.quando === 'espaco' && ctx.espacoLivreCaixa === true)).map(
+    (t) => t.id
+  );
+}
+
+/** Tipos de foto obrigatórios dado o que foi respondido no checklist */
+export function fotosObrigatorias(ctx: ContextoFotos): string[] {
+  const loja = fotosDaLoja(ctx);
+  if (ctx.inoperante || ctx.existeGeladeira !== true) return loja;
+  return [...loja, ...(ctx.geladeiras || []).flatMap((g, i) => fotosDaGeladeira(i + 1, g.concorrentesMisturados))];
 }

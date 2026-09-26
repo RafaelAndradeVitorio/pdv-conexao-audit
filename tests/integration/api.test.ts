@@ -2,9 +2,46 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { app } from '../../src/server/app';
 import { prisma } from '../../src/server/db';
-import { STATUS_ENTRADA, CATEGORIAS_BEBIDA, TIPOS_FOTO } from '../../src/shared/constants';
+import { STATUS_ENTRADA, CATEGORIAS_BEBIDA, FOTOS_DA_GELADEIRA, TIPOS_FOTO } from '../../src/shared/constants';
+import { backfillGeladeiras } from '../../src/server/services/geladeiras';
 
-/** Payload válido de loja aberta com geladeira, sem concorrentes e sem espaço no caixa */
+const LOJAS_TESTE = ['loja-10', 'loja-11', 'loja-12', 'loja-13', 'loja-14'];
+
+/** Loja aberta com várias geladeiras (formato atual): a 2ª tem concorrentes misturados */
+function payloadVariasGeladeiras(lojaId: string, pesquisadorId: string, qtd: number) {
+  const geladeira = (n: number) => ({
+    identificacao: `Geladeira de teste ${n}`,
+    marcaVisual: 'Coca-Cola',
+    posse: n === 2 ? 'Monster' : 'Coca-Cola/FEMSA',
+    monsterPresente: n === 2,
+    mapaBebidas: CATEGORIAS_BEBIDA.map((categoria) => ({ categoria, tem: true, marcas: '', concorrentes: false })),
+    organizacao: 'Organizada',
+    abastecimento: 'Cheia',
+    visibilidade: 'Produtos facilmente identificáveis' as string | null,
+    concorrentesMisturados: n === 2,
+    concorrentesDetalhes: n === 2 ? 'Red Bull na porta' : null
+  });
+  const fotosGeladeira = (n: number) =>
+    ['foto_geladeira', 'foto_marcas', ...(n === 2 ? ['foto_concorrentes'] : []), 'foto_detalhe'].map((t) => `${t}:${n}`);
+  return {
+    lojaId,
+    pesquisadorId,
+    statusEntrada: STATUS_ENTRADA.ABERTA,
+    existeGeladeira: true,
+    geladeiras: Array.from({ length: qtd }, (_, i) => geladeira(i + 1)),
+    monsterPresente: true,
+    marcasCocaPresentes: ['Coca-Cola'],
+    espacoLivreCaixa: false,
+    espacoDisponivel: 'Limitado',
+    outrosDisplaysImpulso: false,
+    potencialDisplay: 'Baixo',
+    fotos: ['foto_fachada', 'foto_caixa', ...Array.from({ length: qtd }, (_, i) => fotosGeladeira(i + 1)).flat()].map(
+      (tipo) => ({ tipo, url: `/uploads/${lojaId}/${tipo.replace(':', '_')}.webp`, tamanhoBytes: 300000 })
+    )
+  };
+}
+
+/** Payload no formato antigo (uma geladeira em campos soltos), como ainda pode estar na fila de um celular */
 function payloadLojaAberta(lojaId: string, pesquisadorId: string) {
   return {
     lojaId,
@@ -38,13 +75,13 @@ describe('API Integration & Concurrency Tests (SDET Suite)', () => {
   beforeAll(async () => {
     // Limpa auditorias de teste para garantir idempotência
     await prisma.foto.deleteMany({
-      where: { auditoria: { lojaId: { in: ['loja-10', 'loja-11', 'loja-12'] } } }
+      where: { auditoria: { lojaId: { in: LOJAS_TESTE } } }
     });
     await prisma.auditoria.deleteMany({
-      where: { lojaId: { in: ['loja-10', 'loja-11', 'loja-12'] } }
+      where: { lojaId: { in: LOJAS_TESTE } }
     });
     await prisma.loja.updateMany({
-      where: { id: { in: ['loja-10', 'loja-11', 'loja-12'] } },
+      where: { id: { in: LOJAS_TESTE } },
       data: { status: 'PENDENTE', auditadaEm: null, pesquisadorId: null }
     });
   });
@@ -106,6 +143,61 @@ describe('API Integration & Concurrency Tests (SDET Suite)', () => {
     expect(res.status).toBe(201);
     expect(res.body.message).toContain('sucesso');
     expect(res.body.auditoria.lojaId).toBe('loja-10');
+  });
+
+  it('POST /api/auditorias - formato antigo vira a Geladeira 1', async () => {
+    const auditoria = await prisma.auditoria.findUnique({ where: { lojaId: 'loja-10' }, include: { geladeiras: true } });
+    expect(auditoria?.geladeiras).toHaveLength(1);
+    expect(auditoria?.geladeiras[0]).toMatchObject({ ordem: 1, posse: 'Coca-Cola/FEMSA', abastecimento: 'Cheia' });
+    expect(auditoria?.monsterNaGeladeira).toBe(true);
+  });
+
+  it('POST /api/auditorias - loja com 3 geladeiras grava uma linha por geladeira', async () => {
+    const permitido = await prisma.pesquisadorLoja.findFirst({ where: { lojaId: 'loja-13' } });
+    const res = await request(app)
+      .post('/api/auditorias')
+      .send(payloadVariasGeladeiras('loja-13', permitido?.pesquisadorId ?? 'pesq-giovanna', 3));
+    expect(res.status).toBe(201);
+    expect(res.body.auditoria.geladeiras.map((g: any) => [g.ordem, g.posse])).toEqual([
+      [1, 'Coca-Cola/FEMSA'],
+      [2, 'Monster'],
+      [3, 'Coca-Cola/FEMSA']
+    ]);
+
+    const detalhe = await request(app).get('/api/lojas/loja-13');
+    expect(detalhe.body.auditoria.geladeiras).toHaveLength(3);
+    expect(detalhe.body.auditoria.geladeiras[1].mapaBebidas).toHaveLength(6);
+  });
+
+  it('POST /api/auditorias - recusa geladeira 2 incompleta apontando qual é', async () => {
+    const payload = payloadVariasGeladeiras('loja-14', 'pesq-giovanna', 2);
+    payload.geladeiras[1] = { ...payload.geladeiras[1], visibilidade: null };
+    const res = await request(app).post('/api/auditorias').send(payload);
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(res.body)).toContain('Geladeira 2: avalie a visibilidade das marcas');
+  });
+
+  it('Backfill: auditoria antiga sem linhas de geladeira vira Geladeira 1', async () => {
+    await prisma.auditoria.create({
+      data: {
+        lojaId: 'loja-14',
+        pesquisadorId: 'pesq-giovanna',
+        statusEntrada: STATUS_ENTRADA.ABERTA,
+        existeGeladeira: true,
+        posseGeladeira: 'FEMSA',
+        abastecimentoGeladeira: 'Média ocupação',
+        monsterPresente: true,
+        monsterNaGeladeira: false
+      }
+    });
+    await backfillGeladeiras();
+    const a = await prisma.auditoria.findUnique({ where: { lojaId: 'loja-14' }, include: { geladeiras: true } });
+    expect(a?.geladeiras).toHaveLength(1);
+    expect(a?.geladeiras[0]).toMatchObject({ ordem: 1, posse: 'FEMSA', abastecimento: 'Média ocupação', monsterPresente: false });
+
+    // Rodar de novo não duplica
+    await backfillGeladeiras();
+    expect(await prisma.geladeira.count({ where: { auditoriaId: a!.id } })).toBe(1);
   });
 
   it('Idempotência de Status: deve atualizar a loja para CONCLUIDA e refletir imediatamente em GET /api/lojas', async () => {
@@ -195,12 +287,28 @@ describe('API Integration & Concurrency Tests (SDET Suite)', () => {
     expect(res.status).toBe(200);
     expect(res.header['content-type']).toContain('text/csv');
     expect(res.text).toContain('"ID Loja";"Rede";"Nome da Loja"');
-    for (const t of TIPOS_FOTO) {
+    for (const t of TIPOS_FOTO.filter((t) => !FOTOS_DA_GELADEIRA.some((g) => g.id === t.id))) {
       expect(res.text).toContain(`Foto ${t.arquivo} (URL)`);
     }
-    expect(res.text).toContain('Refrigerantes - Tem?');
-    expect(res.text).toContain('Visibilidade das Marcas');
+    expect(res.text).toContain('Qtd. de Geladeiras');
     expect(res.text).toContain('Espaço Disponível');
+  });
+
+  it('GET /api/export/csv-geladeiras - uma linha por geladeira', async () => {
+    const res = await request(app).get('/api/export/csv-geladeiras');
+    expect(res.status).toBe(200);
+    expect(res.header['content-type']).toContain('text/csv');
+    const linhas = res.text.split('\r\n');
+    expect(linhas[0]).toContain('"Geladeira Nº"');
+    expect(linhas[0]).toContain('Refrigerantes - Tem?');
+    for (const t of FOTOS_DA_GELADEIRA) {
+      expect(linhas[0]).toContain(`Foto ${t.arquivo} (URL)`);
+    }
+    const daLoja13 = linhas.filter((l) => l.startsWith('"loja-13"'));
+    expect(daLoja13).toHaveLength(3);
+    expect(daLoja13[1]).toContain('"Geladeira de teste 2"');
+    expect(daLoja13[1]).toContain('"Red Bull na porta"');
+    expect(daLoja13[1]).toContain('foto_concorrentes_2.webp');
   });
 
   it('GET /api/export/zip - deve iniciar streaming de arquivo ZIP estruturado com nomes das lojas', async () => {

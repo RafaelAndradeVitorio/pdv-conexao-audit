@@ -70,29 +70,55 @@ test.describe('E2E Mobile - Simulação de Campo (QA / SDET Suite)', () => {
     await page.locator('button:has-text("Finalizar Auditoria")').click();
     await expect(page.locator('text=Informe se existe geladeira de bebidas')).toBeVisible();
 
-    // §4 Geladeira
+    const enviarFotos = async (escopo: Locator, esperadas: number) => {
+      const inputs = escopo.locator('input[type="file"]');
+      expect(await inputs.count()).toBe(esperadas);
+      for (let i = 0; i < esperadas; i++) {
+        await inputs.nth(i).setInputFiles({
+          name: `audit_photo_${i + 1}.jpg`,
+          mimeType: 'image/jpeg',
+          buffer: TEST_IMAGE_BUFFER
+        });
+        // Aguarda indicador de foto carregada
+        await expect(escopo.locator('text=Refazer').nth(i)).toBeVisible({ timeout: 10000 });
+      }
+    };
+
+    /** Responde uma geladeira inteira dentro do card dela, com as fotos */
+    const responderGeladeira = async (numero: number, posse: string, monster: 'Sim' | 'Não') => {
+      const card = page.locator(`[data-geladeira="${numero}"]`);
+      await card.locator('input[placeholder*="Vertical Coca"]').fill(`Geladeira ${numero} do teste`);
+      await escolher('A geladeira possui identificação visual de alguma marca?', 'Coca-Cola', card);
+      await escolher('A geladeira aparenta pertencer a:', posse, card);
+      await escolher('Tem Monster nesta geladeira?', monster, card);
+      for (const categoria of CATEGORIAS_BEBIDA) {
+        const item = card.locator(`[data-categoria="${categoria}"]`);
+        await escolher(categoria, 'Sim', item);
+        await escolher('Tem concorrentes?', 'Não', item);
+      }
+      await escolher('Organização', 'Organizada', card);
+      await escolher('Abastecimento', 'Cheia', card);
+      await escolher('Visibilidade das marcas', 'Produtos facilmente identificáveis', card);
+      await escolher('Produtos concorrentes misturados?', 'Não', card);
+      // Fotos desta geladeira: visão geral, bebidas e detalhe
+      await enviarFotos(card, 3);
+      await expect(card.locator('text=Completa')).toBeVisible();
+    };
+
+    // §4 a §7 Geladeiras: a loja tem duas, cada uma com seu relatório
     await escolher('Existe geladeira de bebidas?', 'Sim');
-    await escolher('A geladeira possui identificação visual de alguma marca?', 'Coca-Cola');
-    await escolher('A geladeira aparenta pertencer a:', 'Coca-Cola/FEMSA');
+    await responderGeladeira(1, 'Coca-Cola/FEMSA', 'Sim');
+    await page.locator('button:has-text("Adicionar outra geladeira")').click();
+    await responderGeladeira(2, 'Monster', 'Não');
 
-    // §5 Monster
-    await escolher('Existe Monster na loja?', 'Sim');
-    await escolher('Existe Monster dentro de alguma geladeira?', 'Sim');
+    // Monster em uma geladeira já marca Monster na loja
+    await expect(
+      page.locator('[data-pergunta="Existe Monster na loja?"]').getByRole('button', { name: 'Sim', exact: true })
+    ).toHaveAttribute('aria-pressed', 'true');
 
-    // §6 Mapa de bebidas
-    for (const categoria of CATEGORIAS_BEBIDA) {
-      const card = page.locator(`[data-categoria="${categoria}"]`);
-      await escolher(categoria, 'Sim', card);
-      await escolher('Tem concorrentes?', 'Não', card);
-    }
+    // §6 Marcas Coca-Cola na loja
     await page.locator('button:has-text("Fanta")').click();
     await page.locator('button:has-text("Sprite")').click();
-
-    // §7 Organização e exposição
-    await escolher('Organização', 'Organizada');
-    await escolher('Abastecimento', 'Cheia');
-    await escolher('Visibilidade das marcas', 'Produtos facilmente identificáveis');
-    await escolher('Produtos concorrentes misturados?', 'Não');
 
     // §9 Caixa e entorno
     await escolher('Existe espaço livre próximo ao caixa?', 'Não');
@@ -100,20 +126,8 @@ test.describe('E2E Mobile - Simulação de Campo (QA / SDET Suite)', () => {
     await escolher('Espaço disponível', 'Limitado');
     await escolher('Potencial para display', 'Baixo');
 
-    // 4. Fotos exigidas pelas respostas: visão geral, geladeira, bebidas, detalhe e caixa
-    const fileInputs = page.locator('input[type="file"]');
-    const totalFotos = await fileInputs.count();
-    expect(totalFotos).toBe(5);
-
-    for (let i = 0; i < totalFotos; i++) {
-      await fileInputs.nth(i).setInputFiles({
-        name: `audit_photo_${i + 1}.jpg`,
-        mimeType: 'image/jpeg',
-        buffer: TEST_IMAGE_BUFFER
-      });
-      // Aguarda indicador de foto carregada
-      await expect(page.locator('text=Refazer').nth(i)).toBeVisible({ timeout: 10000 });
-    }
+    // Fotos da loja: visão geral e caixa
+    await enviarFotos(page.locator('[data-fotos="loja"]'), 2);
 
     // 5. Clica em "Finalizar Auditoria"
     const submitBtn = page.locator('button:has-text("Finalizar Auditoria")');
@@ -148,7 +162,7 @@ test.describe('E2E Mobile - Simulação de Campo (QA / SDET Suite)', () => {
     await expect(page.locator('text=não é permitido reenviar dados')).toBeVisible();
 
     // Garante que o checklist NÃO foi exibido
-    await expect(page.locator('text=Geladeira de Bebidas')).not.toBeVisible();
+    await expect(page.locator('text=Geladeiras de Bebidas')).not.toBeVisible();
   });
 
   test('Cenário 3: Loja Fechada / Inoperante (Fluxo Simplificado)', async ({ page }) => {
@@ -171,7 +185,7 @@ test.describe('E2E Mobile - Simulação de Campo (QA / SDET Suite)', () => {
     await page.locator('button:has-text("Loja fechada")').click();
 
     // Valida que seções de geladeira e bebidas ficam OCULTAS
-    await expect(page.locator('text=Geladeira de Bebidas')).not.toBeVisible();
+    await expect(page.locator('text=Geladeiras de Bebidas')).not.toBeVisible();
     await expect(page.locator('text=Presença de Monster')).not.toBeVisible();
 
     // Exige justificativa em texto

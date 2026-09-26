@@ -4,6 +4,7 @@ import { ZodError } from 'zod';
 import { prisma } from '../db';
 import { LojaInputSchema } from '../../shared/schemas';
 import { ErroLoja, lojasService } from '../services/lojas.service';
+import { geladeirasDaAuditoria } from '../services/geladeiras';
 
 function responderErro(res: Response, error: unknown, contexto: string) {
   if (error instanceof ZodError) {
@@ -92,7 +93,8 @@ export async function obterLojaPorId(req: Request, res: Response) {
         auditoria: {
           include: {
             pesquisador: true,
-            fotos: true
+            fotos: true,
+            geladeiras: true
           }
         }
       }
@@ -116,20 +118,23 @@ export async function obterLojaPorId(req: Request, res: Response) {
         }
       }
 
-      let mapaBebidas: unknown[] = [];
-      if (auditoria.mapaBebidas) {
-        try {
-          const parsed = JSON.parse(auditoria.mapaBebidas);
-          if (Array.isArray(parsed)) mapaBebidas = parsed;
-        } catch {
-          // mapa inválido: ignora
-        }
-      }
+      // Remove os campos antigos de geladeira: o que vale é a lista de geladeiras
+      const {
+        marcaVisualGeladeira: _mv,
+        posseGeladeira: _p,
+        organizacaoGeladeira: _o,
+        abastecimentoGeladeira: _a,
+        visibilidadeMarcas: _v,
+        mapaBebidas: _m,
+        concorrentesMisturados: _c,
+        concorrentesDetalhes: _cd,
+        ...resto
+      } = auditoria;
 
       parsedAuditoria = {
-        ...auditoria,
+        ...resto,
         marcasCocaPresentes: marcasCoca,
-        mapaBebidas
+        geladeiras: geladeirasDaAuditoria(auditoria)
       };
     }
 

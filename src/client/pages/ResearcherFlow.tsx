@@ -6,23 +6,20 @@ import { gravar, ler, remover } from '../utils/armazenamentoLocal';
 import { Loja } from '../../shared/types';
 import {
   STATUS_ENTRADA,
-  MARCA_VISUAL_GELADEIRA,
-  POSSE_GELADEIRA,
-  ORGANIZACAO_GELADEIRA,
-  ABASTECIMENTO_GELADEIRA,
-  VISIBILIDADE_MARCAS,
   ESPACO_DISPONIVEL,
   POTENCIAL_DISPLAY,
   MARCAS_COCA_COLA,
-  CATEGORIAS_BEBIDA,
-  CategoriaBebida,
-  MARCAS_POR_CATEGORIA,
-  fotosObrigatorias
+  MAX_GELADEIRAS,
+  fotosObrigatorias,
+  fotosDaLoja,
+  lerTipoFoto,
+  tipoFotoGeladeira
 } from '../../shared/constants';
-import { AuditoriaSubmissionSchema, MapaBebidaItem } from '../../shared/schemas';
+import { AuditoriaSubmissionSchema } from '../../shared/schemas';
 import { ResearcherSelector } from '../components/ResearcherSelector';
 import { StoreSelector } from '../components/StoreSelector';
 import { PhotoCaptureGrid, PhotoState } from '../components/PhotoCaptureGrid';
+import { GeladeiraCard, GeladeiraForm, geladeiraInicial, geladeiraParaPayload } from '../components/GeladeiraCard';
 import {
   ChecklistSection,
   SimNaoToggle,
@@ -37,34 +34,25 @@ import {
   CheckCircle2,
   Refrigerator,
   Zap,
-  ShoppingBag,
   DollarSign,
   DoorOpen,
   Check,
   GlassWater,
   EyeOff,
   CloudUpload,
-  History
+  History,
+  Plus
 } from 'lucide-react';
 
 type Opcao<T extends readonly string[]> = T[number] | null;
 
 interface ChecklistState {
   existeGeladeira: boolean | null;
-  marcaVisualGeladeira: Opcao<typeof MARCA_VISUAL_GELADEIRA>;
-  posseGeladeira: Opcao<typeof POSSE_GELADEIRA>;
+  /** Uma entrada por geladeira da loja; cada uma com suas respostas e fotos */
+  geladeiras: GeladeiraForm[];
 
   monsterPresente: boolean | null;
-  monsterNaGeladeira: boolean | null;
-
-  mapaBebidas: MapaBebidaItem[];
   marcasCocaPresentes: string[];
-
-  organizacaoGeladeira: Opcao<typeof ORGANIZACAO_GELADEIRA>;
-  abastecimentoGeladeira: Opcao<typeof ABASTECIMENTO_GELADEIRA>;
-  visibilidadeMarcas: Opcao<typeof VISIBILIDADE_MARCAS>;
-  concorrentesMisturados: boolean | null;
-  concorrentesDetalhes: string;
 
   espacoLivreCaixa: boolean | null;
   espacoLadoTamanho: string;
@@ -81,17 +69,9 @@ interface ChecklistState {
 // Nada vem pré-preenchido: o guia pede para não inventar informação (§12)
 const checklistInicial = (): ChecklistState => ({
   existeGeladeira: null,
-  marcaVisualGeladeira: null,
-  posseGeladeira: null,
+  geladeiras: [],
   monsterPresente: null,
-  monsterNaGeladeira: null,
-  mapaBebidas: CATEGORIAS_BEBIDA.map((categoria) => ({ categoria, tem: null, marcas: '', concorrentes: null })),
   marcasCocaPresentes: [],
-  organizacaoGeladeira: null,
-  abastecimentoGeladeira: null,
-  visibilidadeMarcas: null,
-  concorrentesMisturados: null,
-  concorrentesDetalhes: '',
   espacoLivreCaixa: null,
   espacoLadoTamanho: '',
   boaVisibilidadeCaixa: null,
@@ -110,6 +90,38 @@ interface Rascunho {
   form: ChecklistState;
   photos: Record<string, PhotoState>;
   salvoEm: string;
+}
+
+/**
+ * Rascunho salvo antes de existirem várias geladeiras: as respostas soltas viram a Geladeira 1
+ * e as fotos de geladeira ganham o número 1.
+ */
+function migrarRascunho(r: Rascunho): Rascunho {
+  const antigo = r.form as ChecklistState & Record<string, any>;
+  if (Array.isArray(antigo.geladeiras)) return r;
+  const g1: GeladeiraForm = {
+    ...geladeiraInicial(),
+    marcaVisual: antigo.marcaVisualGeladeira ?? null,
+    posse: antigo.posseGeladeira ?? null,
+    monsterPresente: antigo.monsterPresente === false ? false : antigo.monsterNaGeladeira ?? null,
+    mapaBebidas: antigo.mapaBebidas ?? geladeiraInicial().mapaBebidas,
+    organizacao: antigo.organizacaoGeladeira ?? null,
+    abastecimento: antigo.abastecimentoGeladeira ?? null,
+    visibilidade: antigo.visibilidadeMarcas ?? null,
+    concorrentesMisturados: antigo.concorrentesMisturados ?? null,
+    concorrentesDetalhes: antigo.concorrentesDetalhes ?? ''
+  };
+  const photos: Record<string, PhotoState> = {};
+  for (const [tipo, foto] of Object.entries(r.photos || {})) {
+    const { base, geladeira } = lerTipoFoto(tipo);
+    const chave = geladeira ? tipoFotoGeladeira(base, geladeira) : tipo;
+    photos[chave] = { ...foto, tipo: chave };
+  }
+  return {
+    ...r,
+    form: { ...checklistInicial(), ...antigo, geladeiras: antigo.existeGeladeira ? [g1] : [] },
+    photos
+  };
 }
 
 // Loja em andamento: sobrevive a recarregar a página ou fechar o app no meio da visita
@@ -145,6 +157,8 @@ export const ResearcherFlow: React.FC = () => {
   const [justificativaInoperante, setJustificativaInoperante] = useState('');
   const [form, setForm] = useState<ChecklistState>(checklistInicial);
   const [photos, setPhotos] = useState<Record<string, PhotoState>>({});
+  /** Índice da geladeira com o card aberto (só uma por vez, para a tela não virar uma rolagem sem fim) */
+  const [geladeiraAberta, setGeladeiraAberta] = useState<number | null>(0);
 
   const [submitSuccessMessage, setSubmitSuccessMessage] = useState<string | null>(null);
   const [enviadaOffline, setEnviadaOffline] = useState(false);
@@ -167,6 +181,7 @@ export const ResearcherFlow: React.FC = () => {
     setJustificativaInoperante('');
     setForm(checklistInicial());
     setPhotos({});
+    setGeladeiraAberta(0);
   };
 
   // Ao escolher uma loja, restaura o rascunho dela (se houver)
@@ -180,11 +195,14 @@ export const ResearcherFlow: React.FC = () => {
     ler<Rascunho>('rascunhos', selectedLoja.id).then((r) => {
       if (!ativo) return;
       if (r) {
-        setStatusEntrada(r.statusEntrada);
-        setJustificativaInoperante(r.justificativaInoperante);
-        setForm({ ...checklistInicial(), ...r.form });
-        setPhotos(r.photos);
-        setRascunhoRestaurado(r.salvoEm);
+        const rascunho = migrarRascunho(r);
+        setStatusEntrada(rascunho.statusEntrada);
+        setJustificativaInoperante(rascunho.justificativaInoperante);
+        setForm({ ...checklistInicial(), ...rascunho.form });
+        setPhotos(rascunho.photos);
+        setRascunhoRestaurado(rascunho.salvoEm);
+        // Reabre a primeira geladeira que ainda tem algo a responder
+        setGeladeiraAberta(rascunho.form.geladeiras.length ? 0 : null);
       }
       setRascunhoPronto(selectedLoja.id);
     });
@@ -231,23 +249,64 @@ export const ResearcherFlow: React.FC = () => {
   const isInoperante = statusEntrada !== null && statusEntrada !== STATUS_ENTRADA.ABERTA;
   const temGeladeira = form.existeGeladeira === true;
 
-  const tiposFoto = statusEntrada
-    ? fotosObrigatorias({
-        inoperante: isInoperante,
-        existeGeladeira: form.existeGeladeira,
-        concorrentesMisturados: form.concorrentesMisturados,
-        espacoLivreCaixa: form.espacoLivreCaixa
-      })
-    : [];
+  const contextoFotos = {
+    inoperante: isInoperante,
+    existeGeladeira: form.existeGeladeira,
+    geladeiras: form.geladeiras,
+    espacoLivreCaixa: form.espacoLivreCaixa
+  };
+  const tiposFoto = statusEntrada ? fotosObrigatorias(contextoFotos) : [];
+  // As fotos de cada geladeira ficam no card dela; aqui só as da loja
+  const tiposFotoLoja = statusEntrada ? fotosDaLoja(contextoFotos) : [];
+  const geladeirasComMonster = temGeladeira ? form.geladeiras.filter((g) => g.monsterPresente === true).length : 0;
 
   const set = <K extends keyof ChecklistState>(campo: K, valor: ChecklistState[K]) =>
     setForm((prev) => ({ ...prev, [campo]: valor }));
 
-  const setMapa = (categoria: CategoriaBebida, patch: Partial<MapaBebidaItem>) =>
+  const setExisteGeladeira = (v: boolean) => {
     setForm((prev) => ({
       ...prev,
-      mapaBebidas: prev.mapaBebidas.map((m) => (m.categoria === categoria ? { ...m, ...patch } : m))
+      existeGeladeira: v,
+      // Ao dizer que tem geladeira, a Geladeira 1 já aparece aberta
+      geladeiras: v && prev.geladeiras.length === 0 ? [geladeiraInicial()] : prev.geladeiras
     }));
+    if (v) setGeladeiraAberta((atual) => atual ?? 0);
+  };
+
+  const setGeladeira = (indice: number, patch: Partial<GeladeiraForm>) =>
+    setForm((prev) => ({
+      ...prev,
+      geladeiras: prev.geladeiras.map((g, i) => (i === indice ? { ...g, ...patch } : g)),
+      // Monster em uma geladeira = Monster na loja
+      monsterPresente: patch.monsterPresente === true ? true : prev.monsterPresente
+    }));
+
+  const adicionarGeladeira = () => {
+    if (form.geladeiras.length >= MAX_GELADEIRAS) return;
+    setGeladeiraAberta(form.geladeiras.length);
+    setForm((prev) => ({ ...prev, geladeiras: [...prev.geladeiras, geladeiraInicial()] }));
+  };
+
+  const removerGeladeira = (indice: number) => {
+    const numero = indice + 1;
+    if (!window.confirm(`Remover a Geladeira ${numero} com as respostas e fotos dela?`)) return;
+    setForm((prev) => ({ ...prev, geladeiras: prev.geladeiras.filter((_, i) => i !== indice) }));
+    // As geladeiras seguintes sobem um número, junto com as fotos
+    setPhotos((prev) => {
+      const novas: Record<string, PhotoState> = {};
+      for (const [tipo, foto] of Object.entries(prev)) {
+        const { base, geladeira } = lerTipoFoto(tipo);
+        if (geladeira === null) novas[tipo] = foto;
+        else if (geladeira < numero) novas[tipo] = foto;
+        else if (geladeira > numero) {
+          const chave = tipoFotoGeladeira(base, geladeira - 1);
+          novas[chave] = { ...foto, tipo: chave };
+        }
+      }
+      return novas;
+    });
+    setGeladeiraAberta(null);
+  };
 
   const toggleMarcaCoca = (marca: string) =>
     setForm((prev) => ({
@@ -256,30 +315,6 @@ export const ResearcherFlow: React.FC = () => {
         ? prev.marcasCocaPresentes.filter((m) => m !== marca)
         : [...prev.marcasCocaPresentes, marca]
     }));
-
-  const toggleMarcaNoMapa = (categoria: CategoriaBebida, marca: string) => {
-    const item = form.mapaBebidas.find((m) => m.categoria === categoria);
-    const marcasAtuais = (item?.marcas || '')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    const novasMarcas = marcasAtuais.includes(marca)
-      ? marcasAtuais.filter((m) => m !== marca)
-      : [...marcasAtuais, marca];
-
-    const patch: Partial<MapaBebidaItem> = {
-      marcas: novasMarcas.join(', ')
-    };
-
-    // Se selecionou concorrente conhecido e campo concorrentes estiver nulo, sugere true
-    const eConcorrente = !MARCAS_COCA_COLA.includes(marca as any);
-    if (eConcorrente && novasMarcas.includes(marca) && (item?.concorrentes === null || item?.concorrentes === undefined)) {
-      patch.concorrentes = true;
-    }
-
-    setMapa(categoria, patch);
-  };
 
   const handlePhotoCaptured = (tipo: string, data: { size: number; previewUrl: string }) => {
     setPhotos((prev) => ({
@@ -328,23 +363,9 @@ export const ResearcherFlow: React.FC = () => {
       ...base,
       justificativaInoperante: null,
       existeGeladeira: f.existeGeladeira,
-      marcaVisualGeladeira: temGeladeira ? f.marcaVisualGeladeira : null,
-      posseGeladeira: temGeladeira ? f.posseGeladeira : null,
+      geladeiras: temGeladeira ? f.geladeiras.map(geladeiraParaPayload) : [],
       monsterPresente: f.monsterPresente,
-      monsterNaGeladeira: f.monsterPresente && temGeladeira ? f.monsterNaGeladeira : f.monsterPresente === false ? false : null,
-      mapaBebidas: temGeladeira
-        ? f.mapaBebidas.map((m) => ({
-            ...m,
-            marcas: m.tem ? m.marcas?.trim() || null : null,
-            concorrentes: m.tem ? m.concorrentes : null
-          }))
-        : [],
       marcasCocaPresentes: f.marcasCocaPresentes,
-      organizacaoGeladeira: temGeladeira ? f.organizacaoGeladeira : null,
-      abastecimentoGeladeira: temGeladeira ? f.abastecimentoGeladeira : null,
-      visibilidadeMarcas: temGeladeira ? f.visibilidadeMarcas : null,
-      concorrentesMisturados: temGeladeira ? f.concorrentesMisturados : null,
-      concorrentesDetalhes: temGeladeira && f.concorrentesMisturados ? texto(f.concorrentesDetalhes) : null,
       espacoLivreCaixa: f.espacoLivreCaixa,
       espacoLadoTamanho: f.espacoLivreCaixa ? texto(f.espacoLadoTamanho) : null,
       boaVisibilidadeCaixa: f.espacoLivreCaixa ? f.boaVisibilidadeCaixa : null,
@@ -388,7 +409,11 @@ export const ResearcherFlow: React.FC = () => {
       fotos: fotos.map((f) => ({ tipo: f.tipo, url: 'aguardando-envio' }))
     });
     if (!validacao.success) {
-      setSubmitErrors([...new Set(validacao.error.issues.map((i) => i.message))]);
+      const mensagens = validacao.error.issues.map((i) => i.message);
+      // Abre o card da primeira geladeira com pendência
+      const daGeladeira = mensagens.map((m) => /^Geladeira (\d+):/.exec(m)).find(Boolean);
+      if (daGeladeira) setGeladeiraAberta(Number(daGeladeira[1]) - 1);
+      setSubmitErrors([...new Set(mensagens)]);
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
@@ -571,111 +596,63 @@ export const ResearcherFlow: React.FC = () => {
 
           {statusEntrada === STATUS_ENTRADA.ABERTA && (
             <div className="space-y-4">
-              {/* §4 Geladeira */}
-              <ChecklistSection icon={<Refrigerator className="w-4 h-4" />} titulo="Geladeira de Bebidas">
+              {/* §4 a §7 Geladeiras: um bloco por geladeira, com respostas e fotos dela */}
+              <ChecklistSection icon={<Refrigerator className="w-4 h-4" />} titulo="Geladeiras de Bebidas">
                 <SimNaoToggle
                   pergunta="Existe geladeira de bebidas?"
                   value={form.existeGeladeira}
-                  onChange={(v) => set('existeGeladeira', v)}
+                  onChange={setExisteGeladeira}
                 />
                 {temGeladeira && (
-                  <>
-                    <OpcoesChips
-                      pergunta="A geladeira possui identificação visual de alguma marca?"
-                      opcoes={MARCA_VISUAL_GELADEIRA}
-                      value={form.marcaVisualGeladeira}
-                      onChange={(v) => set('marcaVisualGeladeira', v)}
-                    />
-                    <OpcoesChips
-                      pergunta="A geladeira aparenta pertencer a:"
-                      opcoes={POSSE_GELADEIRA}
-                      value={form.posseGeladeira}
-                      onChange={(v) => set('posseGeladeira', v)}
-                    />
-                  </>
+                  <div className="space-y-2.5">
+                    {form.geladeiras.length > 1 && (
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        {form.geladeiras.length} geladeiras nesta loja. Cada uma vira uma linha no relatório.
+                      </p>
+                    )}
+                    {form.geladeiras.map((g, i) => (
+                      <GeladeiraCard
+                        key={i}
+                        numero={i + 1}
+                        geladeira={g}
+                        aberta={geladeiraAberta === i}
+                        onToggle={() => setGeladeiraAberta((atual) => (atual === i ? null : i))}
+                        onChange={(patch) => setGeladeira(i, patch)}
+                        onRemove={form.geladeiras.length > 1 ? () => removerGeladeira(i) : undefined}
+                        photos={photos}
+                        onPhotoCaptured={handlePhotoCaptured}
+                        onPhotoReset={handlePhotoReset}
+                      />
+                    ))}
+                    {form.geladeiras.length < MAX_GELADEIRAS && (
+                      <button
+                        type="button"
+                        onClick={adicionarGeladeira}
+                        className="w-full h-12 rounded-full border-2 border-dashed border-blue-300 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-xs font-semibold flex items-center justify-center gap-2 hover:bg-blue-50 dark:hover:bg-blue-950/30 touch-manipulation transition"
+                      >
+                        <Plus className="w-4 h-4" /> Adicionar outra geladeira
+                      </button>
+                    )}
+                  </div>
                 )}
               </ChecklistSection>
 
-              {/* §5 Monster */}
+              {/* §5 Monster na loja (dentro ou fora das geladeiras) */}
               <ChecklistSection icon={<Zap className="w-4 h-4" />} titulo="Presença de Monster">
                 <SimNaoToggle
                   pergunta="Existe Monster na loja?"
                   value={form.monsterPresente}
                   onChange={(v) => set('monsterPresente', v)}
                 />
-                {form.monsterPresente && temGeladeira && (
-                  <SimNaoToggle
-                    pergunta="Existe Monster dentro de alguma geladeira?"
-                    value={form.monsterNaGeladeira}
-                    onChange={(v) => set('monsterNaGeladeira', v)}
-                  />
+                {geladeirasComMonster > 0 && (
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Monster em {geladeirasComMonster} {geladeirasComMonster === 1 ? 'geladeira' : 'geladeiras'}.
+                  </p>
                 )}
               </ChecklistSection>
 
-              {/* §6 Mapa de bebidas */}
-              <ChecklistSection
-                icon={<GlassWater className="w-4 h-4" />}
-                titulo={temGeladeira ? 'Mapa de Bebidas da Geladeira' : 'Marcas Coca-Cola na Loja'}
-              >
-                {temGeladeira && (
-                  <div className="space-y-2.5">
-                    {form.mapaBebidas.map((item) => (
-                      <div
-                        key={item.categoria}
-                        data-categoria={item.categoria}
-                        className="p-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-[#0B0F19]/60 space-y-2"
-                      >
-                        <SimNaoToggle
-                          pergunta={item.categoria}
-                          value={item.tem}
-                          onChange={(v) => setMapa(item.categoria, { tem: v })}
-                        />
-                        {item.tem && (
-                          <div className="pt-1.5 space-y-2.5 border-t border-slate-200/60 dark:border-slate-800/60">
-                            <div>
-                              <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 block mb-1.5">
-                                Marcas presentes em {item.categoria} (toque para marcar):
-                              </label>
-                              <div className="flex flex-wrap gap-1.5">
-                                {(MARCAS_POR_CATEGORIA[item.categoria] || []).map((marca) => {
-                                  const selecionadas = (item.marcas || '')
-                                    .split(',')
-                                    .map((s) => s.trim())
-                                    .filter(Boolean);
-                                  const selecionada = selecionadas.includes(marca);
-                                  return (
-                                    <button
-                                      key={marca}
-                                      type="button"
-                                      aria-pressed={selecionada}
-                                      onClick={() => toggleMarcaNoMapa(item.categoria, marca)}
-                                      className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all touch-manipulation flex items-center gap-1 ${
-                                        selecionada
-                                          ? 'bg-blue-600 border-blue-600 text-white font-semibold shadow-xs'
-                                          : 'bg-white dark:bg-[#131B2B] border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-blue-300'
-                                      }`}
-                                    >
-                                      <span>{marca}</span>
-                                      <span className="text-[10px] font-bold">
-                                        {selecionada ? '✓' : '+'}
-                                      </span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                            <SimNaoToggle
-                              pergunta="Tem concorrentes?"
-                              value={item.concorrentes ?? null}
-                              onChange={(v) => setMapa(item.categoria, { concorrentes: v })}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
+              {/* §6 Marcas Coca-Cola vistas na loja */}
+              <ChecklistSection icon={<GlassWater className="w-4 h-4" />} titulo="Marcas Coca-Cola na Loja">
                 <div>
                   <label className="text-xs text-slate-800 dark:text-slate-200 font-semibold block mb-2.5">
                     Marcas Coca-Cola encontradas (toque nas que viu):
@@ -705,49 +682,6 @@ export const ResearcherFlow: React.FC = () => {
                   </div>
                 </div>
               </ChecklistSection>
-
-              {/* §7 Organização e exposição */}
-              {temGeladeira && (
-                <ChecklistSection icon={<ShoppingBag className="w-4 h-4" />} titulo="Organização e Exposição">
-                  <OpcoesChips
-                    pergunta="Organização"
-                    opcoes={ORGANIZACAO_GELADEIRA}
-                    value={form.organizacaoGeladeira}
-                    onChange={(v) => set('organizacaoGeladeira', v)}
-                  />
-                  <OpcoesChips
-                    pergunta="Abastecimento"
-                    opcoes={ABASTECIMENTO_GELADEIRA}
-                    value={form.abastecimentoGeladeira}
-                    onChange={(v) => set('abastecimentoGeladeira', v)}
-                  />
-                  <OpcoesChips
-                    pergunta="Visibilidade das marcas"
-                    opcoes={VISIBILIDADE_MARCAS}
-                    value={form.visibilidadeMarcas}
-                    onChange={(v) => set('visibilidadeMarcas', v)}
-                  />
-                  <SimNaoToggle
-                    pergunta="Produtos concorrentes misturados?"
-                    value={form.concorrentesMisturados}
-                    onChange={(v) => set('concorrentesMisturados', v)}
-                  />
-                  {form.concorrentesMisturados && (
-                    <div>
-                      <label className="text-xs text-slate-600 dark:text-slate-400 font-medium block mb-1.5">
-                        Quais marcas estão misturadas e onde estão posicionadas?
-                      </label>
-                      <input
-                        type="text"
-                        value={form.concorrentesDetalhes}
-                        onChange={(e) => set('concorrentesDetalhes', e.target.value)}
-                        placeholder="Ex: Pepsi e Guaraná Antarctica na 2ª prateleira..."
-                        className={inputClass}
-                      />
-                    </div>
-                  )}
-                </ChecklistSection>
-              )}
 
               {/* §9 Caixa e entorno – Display Coca-Cola Vai Até Você */}
               <ChecklistSection icon={<DollarSign className="w-4 h-4" />} titulo='Caixa e Entorno – Display "Coca-Cola Vai Até Você"'>
@@ -843,10 +777,11 @@ export const ResearcherFlow: React.FC = () => {
           )}
 
           {statusEntrada && (
-            <div className="bg-white dark:bg-[#131B2B] border border-slate-200/90 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-sm">
+            <div data-fotos="loja" className="bg-white dark:bg-[#131B2B] border border-slate-200/90 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-sm">
               <PhotoCaptureGrid
                 isInoperante={isInoperante}
-                tipos={tiposFoto}
+                tipos={tiposFotoLoja}
+                titulo={isInoperante ? undefined : `Fotos da Loja (${tiposFotoLoja.length})`}
                 photos={photos}
                 onPhotoCaptured={handlePhotoCaptured}
                 onPhotoReset={handlePhotoReset}

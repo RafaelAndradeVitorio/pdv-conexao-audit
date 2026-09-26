@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   calcularNotaExposicao,
   consolidarResultados,
+  GeladeiraAuditada,
   listarOportunidades,
   LojaAuditada
 } from '../../src/shared/analytics';
@@ -9,18 +10,23 @@ import { CATEGORIAS_BEBIDA } from '../../src/shared/constants';
 
 type Aud = NonNullable<LojaAuditada['auditoria']>;
 
-const geladeiraPerfeita: Aud = {
-  existeGeladeira: true,
-  marcaVisualGeladeira: 'Coca-Cola',
-  posseGeladeira: 'Coca-Cola/FEMSA',
-  organizacaoGeladeira: 'Organizada',
-  abastecimentoGeladeira: 'Cheia',
-  visibilidadeMarcas: 'Produtos facilmente identificáveis',
+const geladeiraPerfeita: GeladeiraAuditada = {
+  ordem: 1,
+  marcaVisual: 'Coca-Cola',
+  posse: 'Coca-Cola/FEMSA',
+  organizacao: 'Organizada',
+  abastecimento: 'Cheia',
+  visibilidade: 'Produtos facilmente identificáveis',
   concorrentesMisturados: false,
   monsterPresente: true,
-  monsterNaGeladeira: true,
+  mapaBebidas: CATEGORIAS_BEBIDA.map((categoria) => ({ categoria, tem: true, marcas: '', concorrentes: false }))
+};
+
+const lojaPerfeita: Aud = {
+  existeGeladeira: true,
+  geladeiras: [geladeiraPerfeita],
+  monsterPresente: true,
   marcasCocaPresentes: ['Coca-Cola', 'Monster'],
-  mapaBebidas: CATEGORIAS_BEBIDA.map((categoria) => ({ categoria, tem: true, marcas: '', concorrentes: false })),
   espacoLivreCaixa: false,
   espacoDisponivel: 'Insuficiente',
   potencialDisplay: 'Baixo'
@@ -43,24 +49,22 @@ describe('Resultados do levantamento (Guia §13)', () => {
     expect(
       calcularNotaExposicao({
         ...geladeiraPerfeita,
-        organizacaoGeladeira: 'Pouco organizada',
-        abastecimentoGeladeira: 'Quase vazia',
-        visibilidadeMarcas: 'Difícil identificar as marcas',
+        organizacao: 'Pouco organizada',
+        abastecimento: 'Quase vazia',
+        visibilidade: 'Difícil identificar as marcas',
         concorrentesMisturados: true
       })
     ).toBe(0);
   });
 
-  it('loja sem geladeira ou com avaliação antiga incompleta não recebe nota', () => {
-    expect(calcularNotaExposicao({ existeGeladeira: false })).toBeNull();
-    expect(calcularNotaExposicao({ ...geladeiraPerfeita, visibilidadeMarcas: null })).toBeNull();
+  it('geladeira com avaliação antiga incompleta não recebe nota', () => {
+    expect(calcularNotaExposicao({ ...geladeiraPerfeita, visibilidade: null })).toBeNull();
   });
 
   it('aponta concorrentes na geladeira FEMSA e Monster fora da geladeira como oportunidades', () => {
     const ops = listarOportunidades({
-      ...geladeiraPerfeita,
-      concorrentesMisturados: true,
-      monsterNaGeladeira: false,
+      ...lojaPerfeita,
+      geladeiras: [{ ...geladeiraPerfeita, concorrentesMisturados: true, monsterPresente: false }],
       potencialDisplay: 'Alto'
     });
     expect(ops).toEqual([
@@ -70,14 +74,27 @@ describe('Resultados do levantamento (Guia §13)', () => {
     ]);
   });
 
+  it('com várias geladeiras, a oportunidade diz de qual geladeira é', () => {
+    const ops = listarOportunidades({
+      ...lojaPerfeita,
+      geladeiras: [geladeiraPerfeita, { ...geladeiraPerfeita, ordem: 2, abastecimento: 'Quase vazia' }]
+    });
+    expect(ops).toEqual(['Geladeira 2: Abastecimento baixo']);
+  });
+
   it('consolida geladeiras, concorrência FEMSA, Monster, ranking e display', () => {
     const r = consolidarResultados([
-      loja('a', geladeiraPerfeita),
+      loja('a', lojaPerfeita),
       loja('b', {
-        ...geladeiraPerfeita,
-        abastecimentoGeladeira: 'Baixa ocupação',
-        concorrentesMisturados: true,
-        concorrentesDetalhes: 'Pepsi na 2ª prateleira',
+        ...lojaPerfeita,
+        geladeiras: [
+          {
+            ...geladeiraPerfeita,
+            abastecimento: 'Baixa ocupação',
+            concorrentesMisturados: true,
+            concorrentesDetalhes: 'Pepsi na 2ª prateleira'
+          }
+        ],
         potencialDisplay: 'Médio',
         espacoDisponivel: 'Limitado'
       }),
@@ -96,6 +113,7 @@ describe('Resultados do levantamento (Guia §13)', () => {
     expect(r.lojasAbertas).toBe(3);
     expect(r.lojasInoperantes).toBe(1);
     expect(r.geladeiras.comGeladeira).toBe(2);
+    expect(r.geladeiras.total).toBe(2);
     expect(r.geladeiras.semGeladeira).toBe(1);
     expect(r.geladeiras.porPosse.find((p) => p.rotulo === 'Coca-Cola/FEMSA')?.qtd).toBe(2);
 
@@ -111,7 +129,39 @@ describe('Resultados do levantamento (Guia §13)', () => {
       ['b', 63],
       ['c', null]
     ]);
+    expect(r.oportunidades.map((l) => l.lojaId)).toEqual(['b', 'c']);
     // Potencial alto antes de médio
     expect(r.display.map((l) => l.lojaId)).toEqual(['c', 'b']);
+  });
+
+  it('conta cada geladeira nos gráficos e no ranking quando a loja tem várias', () => {
+    const r = consolidarResultados([
+      loja('a', {
+        ...lojaPerfeita,
+        geladeiras: [
+          { ...geladeiraPerfeita, identificacao: 'Vertical' },
+          { ...geladeiraPerfeita, ordem: 2, posse: 'Monster', monsterPresente: true, concorrentesMisturados: true },
+          { ...geladeiraPerfeita, ordem: 3, posse: 'Outro fornecedor', monsterPresente: false }
+        ]
+      }),
+      loja('b', lojaPerfeita)
+    ]);
+
+    expect(r.geladeiras.comGeladeira).toBe(2);
+    expect(r.geladeiras.total).toBe(4);
+    expect(r.geladeiras.porPosse.find((p) => p.rotulo === 'Coca-Cola/FEMSA')?.qtd).toBe(2);
+    expect(r.geladeiras.porPosse.find((p) => p.rotulo === 'Monster')?.qtd).toBe(1);
+    expect(r.marcas.categorias.find((c) => c.categoria === 'Água')?.tem).toBe(4);
+
+    expect(r.ranking).toHaveLength(4);
+    expect(r.ranking.filter((l) => l.lojaId === 'a').map((l) => [l.geladeira, l.totalGeladeiras])).toEqual([
+      [1, 3],
+      [3, 3],
+      [2, 3]
+    ]);
+    expect(r.ranking[0].identificacao).toBe('Vertical');
+
+    const monsterA = r.monster.lojas.find((l) => l.lojaId === 'a');
+    expect(monsterA).toMatchObject({ naGeladeira: true, geladeirasComMonster: 2, posseGeladeira: 'Coca-Cola/FEMSA, Monster' });
   });
 });

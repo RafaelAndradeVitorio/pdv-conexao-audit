@@ -6,23 +6,7 @@ import { ResumoDashboard } from '../../shared/types';
 import { googleDriveService } from './googleDrive.service';
 import { pesquisadoresService } from './pesquisadores.service';
 import { consolidarResultados, LojaAuditada, ResultadosLevantamento } from '../../shared/analytics';
-
-// Valores gravados antes do formulário seguir os nomes do guia
-const VALORES_LEGADOS: Record<string, string> = {
-  FEMSA: 'Coca-Cola/FEMSA',
-  Outro: 'Outro fornecedor',
-  Outra: 'Outra marca'
-};
-
-const lerJsonArray = <T>(raw: string | null): T[] => {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-};
+import { geladeirasDaAuditoria, lerJsonArray } from './geladeiras';
 
 export class DuplicateAuditError extends Error {
   public statusCode = 409;
@@ -113,6 +97,7 @@ export class AuditService {
         : STATUS_LOJA.FINALIZADA_INOPERANTE;
 
       const agora = new Date();
+      const geladeiras = isOperante && data.existeGeladeira ? data.geladeiras : [];
 
       // 3. Cria o registro da auditoria
       const auditoria = await tx.auditoria.create({
@@ -123,19 +108,10 @@ export class AuditService {
           justificativaInoperante: data.justificativaInoperante || null,
 
           existeGeladeira: data.existeGeladeira ?? null,
-          marcaVisualGeladeira: data.marcaVisualGeladeira ?? null,
-          posseGeladeira: data.posseGeladeira ?? null,
-          organizacaoGeladeira: data.organizacaoGeladeira ?? null,
-          abastecimentoGeladeira: data.abastecimentoGeladeira ?? null,
-          visibilidadeMarcas: data.visibilidadeMarcas ?? null,
-
           monsterPresente: data.monsterPresente ?? null,
-          monsterNaGeladeira: data.monsterNaGeladeira ?? null,
+          // Resumo para filtros rápidos: há Monster em alguma geladeira
+          monsterNaGeladeira: geladeiras.length ? geladeiras.some((g) => g.monsterPresente === true) : null,
           marcasCocaPresentes: JSON.stringify(data.marcasCocaPresentes || []),
-          mapaBebidas: data.mapaBebidas?.length ? JSON.stringify(data.mapaBebidas) : null,
-
-          concorrentesMisturados: data.concorrentesMisturados ?? null,
-          concorrentesDetalhes: data.concorrentesDetalhes ?? null,
 
           espacoLivreCaixa: data.espacoLivreCaixa ?? null,
           espacoLadoTamanho: data.espacoLadoTamanho ?? null,
@@ -149,6 +125,21 @@ export class AuditService {
           descricaoOportunidade: data.descricaoOportunidade ?? null,
 
           createdAt: agora,
+          geladeiras: {
+            create: geladeiras.map((g, i) => ({
+              ordem: i + 1,
+              identificacao: g.identificacao?.trim() || null,
+              marcaVisual: g.marcaVisual ?? null,
+              posse: g.posse ?? null,
+              monsterPresente: g.monsterPresente ?? null,
+              mapaBebidas: g.mapaBebidas?.length ? JSON.stringify(g.mapaBebidas) : null,
+              organizacao: g.organizacao ?? null,
+              abastecimento: g.abastecimento ?? null,
+              visibilidade: g.visibilidade ?? null,
+              concorrentesMisturados: g.concorrentesMisturados ?? null,
+              concorrentesDetalhes: g.concorrentesMisturados ? g.concorrentesDetalhes?.trim() || null : null
+            }))
+          },
           fotos: {
             create: data.fotos.map((f: { tipo: string; url: string; tamanhoBytes?: number; base64?: string }) => ({
               tipo: f.tipo,
@@ -160,6 +151,7 @@ export class AuditService {
         },
         include: {
           fotos: true,
+          geladeiras: { orderBy: { ordem: 'asc' } },
           pesquisador: true,
           loja: true
         }
@@ -242,7 +234,7 @@ export class AuditService {
    */
   async getResultados(): Promise<ResultadosLevantamento> {
     const lojas = await prisma.loja.findMany({
-      include: { auditoria: true },
+      include: { auditoria: { include: { geladeiras: true } } },
       orderBy: { id: 'asc' }
     });
 
@@ -253,12 +245,8 @@ export class AuditService {
       status: loja.status,
       auditoria: a && {
         ...a,
-        posseGeladeira: a.posseGeladeira ? VALORES_LEGADOS[a.posseGeladeira] ?? a.posseGeladeira : null,
-        marcaVisualGeladeira: a.marcaVisualGeladeira
-          ? VALORES_LEGADOS[a.marcaVisualGeladeira] ?? a.marcaVisualGeladeira
-          : null,
-        marcasCocaPresentes: lerJsonArray<string>(a.marcasCocaPresentes),
-        mapaBebidas: lerJsonArray(a.mapaBebidas)
+        geladeiras: geladeirasDaAuditoria(a),
+        marcasCocaPresentes: lerJsonArray<string>(a.marcasCocaPresentes)
       }
     }));
 

@@ -13,7 +13,8 @@ import {
   HardDrive,
   ExternalLink,
   Eye,
-  LogOut
+  LogOut,
+  Refrigerator
 } from 'lucide-react';
 import { REDES_PDV, STATUS_LOJA } from '../../shared/constants';
 import { AuditDetailModal } from '../components/AuditDetailModal';
@@ -45,6 +46,10 @@ export const CoordinatorDashboard: React.FC<{ onSair?: () => void }> = ({ onSair
 
   const handleDownloadCsv = () => {
     window.open('/api/export/csv', '_blank');
+  };
+
+  const handleDownloadCsvGeladeiras = () => {
+    window.open('/api/export/csv-geladeiras', '_blank');
   };
 
   const handleDownloadZip = () => {
@@ -104,7 +109,16 @@ export const CoordinatorDashboard: React.FC<{ onSair?: () => void }> = ({ onSair
             className="flex-1 sm:flex-initial h-10 sm:h-11 flex items-center justify-center gap-2 px-3.5 sm:px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-semibold rounded-full shadow-sm transition touch-manipulation whitespace-nowrap"
           >
             <FileSpreadsheet className="w-4 h-4 shrink-0" />
-            <span><span className="hidden sm:inline">Exportar </span>Relatório CSV</span>
+            <span><span className="hidden sm:inline">Relatório </span>CSV Lojas</span>
+          </button>
+
+          <button
+            onClick={handleDownloadCsvGeladeiras}
+            title="Uma linha por geladeira (lojas com várias geladeiras aparecem em várias linhas)"
+            className="flex-1 sm:flex-initial h-10 sm:h-11 flex items-center justify-center gap-2 px-3.5 sm:px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-semibold rounded-full shadow-sm transition touch-manipulation whitespace-nowrap"
+          >
+            <Refrigerator className="w-4 h-4 shrink-0" />
+            <span><span className="hidden sm:inline">Relatório </span>CSV Geladeiras</span>
           </button>
 
           <button

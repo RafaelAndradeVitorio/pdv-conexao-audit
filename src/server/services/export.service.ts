@@ -3,38 +3,61 @@ import fs from 'fs';
 import path from 'path';
 import { prisma } from '../db';
 import { storageService } from '../storage/storage.service';
-import { CATEGORIAS_BEBIDA, NOME_ARQUIVO_FOTO, TIPOS_FOTO } from '../../shared/constants';
-import type { MapaBebidaItem } from '../../shared/schemas';
+import {
+  CATEGORIAS_BEBIDA,
+  FOTOS_DA_GELADEIRA,
+  TIPOS_FOTO,
+  lerTipoFoto,
+  nomeArquivoFoto
+} from '../../shared/constants';
+import { geladeirasDaAuditoria, lerJsonArray } from './geladeiras';
 
 const simNao = (v: boolean | null | undefined): string =>
   v === null || v === undefined ? '' : v ? 'Sim' : 'Não';
 
-const parseJson = <T>(raw: string | null | undefined, fallback: T): T => {
-  if (!raw) return fallback;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
+const escapeCsv = (val: unknown): string => {
+  if (val === null || val === undefined) return '""';
+  const str = String(val).replace(/"/g, '""');
+  return `"${str}"`;
 };
+
+/** CSV com ";" e BOM para o Excel em português abrir com acentos e colunas certas */
+const montarCsv = (headers: string[], linhas: unknown[][]) =>
+  '﻿' + [headers, ...linhas].map((l) => l.map(escapeCsv).join(';')).join('\r\n');
+
+type FotoLink = { tipo: string; url: string; driveUrl: string | null };
+
+const linkFoto = (f: FotoLink | undefined, baseUrl: string): string => {
+  if (!f) return '';
+  if (f.driveUrl) return f.driveUrl;
+  return f.url.startsWith('http') ? f.url : `${baseUrl}${f.url}`;
+};
+
+/** Fotos da loja (não de geladeira): visão geral, caixa, display */
+const FOTOS_DA_LOJA = TIPOS_FOTO.filter((t) => !FOTOS_DA_GELADEIRA.some((g) => g.id === t.id));
+
+const lojasComAuditoria = () =>
+  prisma.loja.findMany({
+    include: {
+      auditoria: {
+        include: {
+          pesquisador: true,
+          geladeiras: true,
+          // Sem o base64: o relatório só precisa dos links
+          fotos: { select: { tipo: true, url: true, driveUrl: true } }
+        }
+      }
+    },
+    orderBy: { id: 'asc' }
+  });
 
 export class ExportService {
   /**
-   * Gera relatório CSV completo com todas as 57 lojas e colunas detalhadas
+   * Relatório por loja: uma linha por loja, com a quantidade de geladeiras.
+   * O detalhe de cada geladeira fica no relatório de geladeiras.
    */
   async generateCsvReport(baseUrl = ''): Promise<string> {
-    const lojas = await prisma.loja.findMany({
-      include: {
-        auditoria: {
-          include: {
-            pesquisador: true,
-            // Sem o base64: o relatório só precisa dos links
-            fotos: { select: { tipo: true, url: true, driveUrl: true } }
-          }
-        }
-      },
-      orderBy: { id: 'asc' }
-    });
+    const lojas = await lojasComAuditoria();
 
     const headers = [
       'ID Loja',
@@ -50,17 +73,10 @@ export class ExportService {
       'Status de Entrada',
       'Justificativa / Situação',
       'Existe Geladeira?',
-      'Identificação Visual Geladeira',
-      'Geladeira Aparenta Pertencer a',
+      'Qtd. de Geladeiras',
       'Monster na Loja?',
-      'Monster na Geladeira?',
-      ...CATEGORIAS_BEBIDA.flatMap((c) => [`${c} - Tem?`, `${c} - Principais Marcas`, `${c} - Concorrentes?`]),
+      'Monster em Alguma Geladeira?',
       'Marcas Coca-Cola Presentes',
-      'Organização',
-      'Abastecimento',
-      'Visibilidade das Marcas',
-      'Concorrentes Misturados?',
-      'Concorrentes - Marcas e Posição',
       'Espaço Livre no Caixa?',
       'Lado e Tamanho do Espaço',
       'Produtos Expostos no Caixa',
@@ -71,34 +87,15 @@ export class ExportService {
       'Exposição Próxima ao Caixa?',
       'Potencial Display Coca-Cola Vai Até Você',
       'Descrição da Oportunidade',
-      ...TIPOS_FOTO.map((t) => `Foto ${t.arquivo} (URL)`)
+      ...FOTOS_DA_LOJA.map((t) => `Foto ${t.arquivo} (URL)`)
     ];
 
-    const escapeCsv = (val: unknown): string => {
-      if (val === null || val === undefined) return '""';
-      const str = String(val).replace(/"/g, '""');
-      return `"${str}"`;
-    };
-
-    const rows: string[] = [headers.map(escapeCsv).join(';')];
-
-    for (const l of lojas) {
+    const linhas = lojas.map((l) => {
       const a = l.auditoria;
-      const pesq = a?.pesquisador?.nome || '';
-      const auditadaEm = l.auditadaEm ? new Date(l.auditadaEm).toLocaleString('pt-BR') : '';
+      const geladeiras = a ? geladeirasDaAuditoria(a) : [];
+      const marcasCoca = lerJsonArray<string>(a?.marcasCocaPresentes).join(', ');
 
-      const marcasRaw = parseJson<unknown>(a?.marcasCocaPresentes, a?.marcasCocaPresentes || '');
-      const marcasCoca = Array.isArray(marcasRaw) ? marcasRaw.join(', ') : String(marcasRaw || '');
-      const mapa = parseJson<MapaBebidaItem[]>(a?.mapaBebidas, []);
-
-      const getFotoUrl = (tipo: string): string => {
-        const f = a?.fotos.find((foto) => foto.tipo === tipo);
-        if (!f) return '';
-        if (f.driveUrl) return f.driveUrl;
-        return f.url.startsWith('http') ? f.url : `${baseUrl}${f.url}`;
-      };
-
-      const row = [
+      return [
         l.id,
         l.rede,
         l.nome,
@@ -107,25 +104,15 @@ export class ExportService {
         l.cnpjFormatado,
         l.cnpj,
         l.status,
-        auditadaEm,
-        pesq,
+        l.auditadaEm ? new Date(l.auditadaEm).toLocaleString('pt-BR') : '',
+        a?.pesquisador?.nome || '',
         a?.statusEntrada || '',
         a?.justificativaInoperante || '',
         simNao(a?.existeGeladeira),
-        a?.marcaVisualGeladeira || '',
-        a?.posseGeladeira || '',
+        a?.existeGeladeira ? geladeiras.length : a?.existeGeladeira === false ? 0 : '',
         simNao(a?.monsterPresente),
-        simNao(a?.monsterNaGeladeira),
-        ...CATEGORIAS_BEBIDA.flatMap((c) => {
-          const item = mapa.find((m) => m.categoria === c);
-          return [simNao(item?.tem), item?.marcas || '', item?.tem ? simNao(item.concorrentes) : ''];
-        }),
+        geladeiras.length ? simNao(geladeiras.some((g) => g.monsterPresente)) : '',
         marcasCoca,
-        a?.organizacaoGeladeira || '',
-        a?.abastecimentoGeladeira || '',
-        a?.visibilidadeMarcas || '',
-        simNao(a?.concorrentesMisturados),
-        a?.concorrentesDetalhes || '',
         simNao(a?.espacoLivreCaixa),
         a?.espacoLadoTamanho || '',
         a?.produtosExpostosCaixa || '',
@@ -136,13 +123,85 @@ export class ExportService {
         simNao(a?.displaysImpulsoProximo),
         a?.potencialDisplay || '',
         a?.descricaoOportunidade || '',
-        ...TIPOS_FOTO.map((t) => getFotoUrl(t.id))
+        ...FOTOS_DA_LOJA.map((t) => linkFoto(a?.fotos.find((f) => f.tipo === t.id), baseUrl))
       ];
+    });
 
-      rows.push(row.map(escapeCsv).join(';'));
+    return montarCsv(headers, linhas);
+  }
+
+  /**
+   * Relatório de geladeiras: uma linha por geladeira, com os dados da loja repetidos
+   * para a planilha poder ser filtrada e ordenada sozinha.
+   */
+  async generateGeladeirasCsv(baseUrl = ''): Promise<string> {
+    const lojas = await lojasComAuditoria();
+
+    const headers = [
+      'ID Loja',
+      'Rede',
+      'Nome da Loja',
+      'Estação de Metrô',
+      'CNPJ Formatado',
+      'Data/Hora Auditoria',
+      'Pesquisador',
+      'Geladeira Nº',
+      'Qtd. de Geladeiras na Loja',
+      'Identificação da Geladeira',
+      'Identificação Visual',
+      'Aparenta Pertencer a',
+      'Monster nesta Geladeira?',
+      ...CATEGORIAS_BEBIDA.flatMap((c) => [`${c} - Tem?`, `${c} - Principais Marcas`, `${c} - Concorrentes?`]),
+      'Organização',
+      'Abastecimento',
+      'Visibilidade das Marcas',
+      'Concorrentes Misturados?',
+      'Concorrentes - Marcas e Posição',
+      ...FOTOS_DA_GELADEIRA.map((t) => `Foto ${t.arquivo} (URL)`)
+    ];
+
+    const linhas: unknown[][] = [];
+    for (const l of lojas) {
+      const a = l.auditoria;
+      if (!a) continue;
+      const geladeiras = geladeirasDaAuditoria(a);
+
+      for (const g of geladeiras) {
+        const fotoDaGeladeira = (base: string) =>
+          a.fotos.find((f) => {
+            const t = lerTipoFoto(f.tipo);
+            return t.base === base && t.geladeira === g.ordem;
+          });
+
+        linhas.push([
+          l.id,
+          l.rede,
+          l.nome,
+          l.estacaoMetro || '',
+          l.cnpjFormatado,
+          l.auditadaEm ? new Date(l.auditadaEm).toLocaleString('pt-BR') : '',
+          a.pesquisador?.nome || '',
+          g.ordem,
+          geladeiras.length,
+          g.identificacao || '',
+          g.marcaVisual || '',
+          g.posse || '',
+          simNao(g.monsterPresente),
+          ...CATEGORIAS_BEBIDA.flatMap((c) => {
+            const item = (g.mapaBebidas || []).find((m) => m.categoria === c);
+            return [simNao(item?.tem), item?.marcas || '', item?.tem ? simNao(item.concorrentes) : ''];
+          }),
+          g.organizacao || '',
+          g.abastecimento || '',
+          g.visibilidade || '',
+          simNao(g.concorrentesMisturados),
+          g.concorrentesDetalhes || '',
+          ...FOTOS_DA_GELADEIRA.map((t) => linkFoto(fotoDaGeladeira(t.id), baseUrl))
+        ]);
+      }
     }
 
-    return '\uFEFF' + rows.join('\r\n');
+    return montarCsv(headers, linhas);
   }
 
   /**
@@ -197,7 +256,7 @@ export class ExportService {
 
         const relative = foto.url.replace(/^\/?uploads\//, '');
         const fullDiskPath = path.join(baseDir, relative);
-        const zipEntryName = `${nomePastaLoja}/${NOME_ARQUIVO_FOTO[foto.tipo] || foto.tipo}.webp`;
+        const zipEntryName = `${nomePastaLoja}/${nomeArquivoFoto(foto.tipo)}.webp`;
         const processada = aguardarEntrada();
 
         if (fs.existsSync(fullDiskPath)) {

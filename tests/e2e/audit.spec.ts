@@ -40,7 +40,8 @@ test.describe('PWA Auditoria PDV - E2E Tests', () => {
     // Valida títulos e métricas do dashboard
     await expect(page.locator('text=Painel do Coordenador de Campo')).toBeVisible();
     await expect(page.locator('text=Progresso Geral da Operação')).toBeVisible();
-    await expect(page.locator('text=Relatório CSV')).toBeVisible();
+    await expect(page.locator('text=CSV Lojas')).toBeVisible();
+    await expect(page.locator('text=CSV Geladeiras')).toBeVisible();
     await expect(page.locator('text=ZIP Fotos')).toBeVisible();
 
     // Valida tabela de lojas

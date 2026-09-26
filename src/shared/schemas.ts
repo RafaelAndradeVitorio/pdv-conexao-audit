@@ -11,7 +11,10 @@ import {
   ESPACO_DISPONIVEL,
   POTENCIAL_DISPLAY,
   CATEGORIAS_BEBIDA,
-  TIPOS_FOTO,
+  MAX_GELADEIRAS,
+  chaveTipoFoto,
+  lerTipoFoto,
+  metaTipoFoto,
   fotosObrigatorias
 } from './constants';
 
@@ -117,7 +120,71 @@ export const JUSTIFICATIVA_MIN = 10;
 
 const nulo = (v: unknown) => v === undefined || v === null;
 
-export const AuditoriaSubmissionSchema = z.object({
+/** Respostas de uma geladeira (§4 a §7 do guia); a loja pode ter várias */
+export const GeladeiraSchema = z.object({
+  identificacao: z.string().optional().nullable(),
+  marcaVisual: z.enum(MARCA_VISUAL_GELADEIRA).optional().nullable(),
+  posse: z.enum(POSSE_GELADEIRA).optional().nullable(),
+  monsterPresente: z.boolean().optional().nullable(),
+  mapaBebidas: z.array(MapaBebidaItemSchema).optional().default([]),
+  organizacao: z.enum(ORGANIZACAO_GELADEIRA).optional().nullable(),
+  abastecimento: z.enum(ABASTECIMENTO_GELADEIRA).optional().nullable(),
+  visibilidade: z.enum(VISIBILIDADE_MARCAS).optional().nullable(),
+  concorrentesMisturados: z.boolean().optional().nullable(),
+  concorrentesDetalhes: z.string().optional().nullable()
+});
+
+export type GeladeiraInput = z.infer<typeof GeladeiraSchema>;
+
+/** O que ainda falta responder em uma geladeira (usado no envio e no card do pesquisador) */
+export function pendenciasGeladeira(g: Partial<GeladeiraInput>): string[] {
+  const faltas: string[] = [];
+  if (!g.marcaVisual) faltas.push('informe a identificação visual');
+  if (!g.posse) faltas.push('informe a quem a geladeira aparenta pertencer');
+  if (nulo(g.monsterPresente)) faltas.push('informe se tem Monster nesta geladeira');
+  for (const categoria of CATEGORIAS_BEBIDA) {
+    const item = (g.mapaBebidas || []).find((m) => m.categoria === categoria);
+    if (!item || nulo(item.tem)) faltas.push(`mapa de bebidas: informe se tem ${categoria}`);
+    else if (item.tem && nulo(item.concorrentes)) faltas.push(`mapa de bebidas: informe se há concorrentes em ${categoria}`);
+  }
+  if (!g.organizacao) faltas.push('avalie a organização');
+  if (!g.abastecimento) faltas.push('avalie o abastecimento');
+  if (!g.visibilidade) faltas.push('avalie a visibilidade das marcas');
+  if (nulo(g.concorrentesMisturados)) faltas.push('informe se há produtos concorrentes misturados');
+  if (g.concorrentesMisturados === true && (g.concorrentesDetalhes?.trim().length || 0) < 3) {
+    faltas.push('registre quais marcas concorrentes estão misturadas e onde estão');
+  }
+  return faltas;
+}
+
+/**
+ * Envios no formato antigo (uma geladeira em campos soltos da auditoria) ainda podem estar
+ * na fila de algum celular: viram a geladeira 1.
+ */
+export function converterFormatoAntigo(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
+  const d = raw as Record<string, unknown>;
+  if (Array.isArray(d.geladeiras) || d.existeGeladeira !== true) return d;
+  return {
+    ...d,
+    geladeiras: [
+      {
+        identificacao: null,
+        marcaVisual: d.marcaVisualGeladeira ?? null,
+        posse: d.posseGeladeira ?? null,
+        monsterPresente: d.monsterPresente === false ? false : d.monsterNaGeladeira ?? null,
+        mapaBebidas: d.mapaBebidas ?? [],
+        organizacao: d.organizacaoGeladeira ?? null,
+        abastecimento: d.abastecimentoGeladeira ?? null,
+        visibilidade: d.visibilidadeMarcas ?? null,
+        concorrentesMisturados: d.concorrentesMisturados ?? null,
+        concorrentesDetalhes: d.concorrentesDetalhes ?? null
+      }
+    ]
+  };
+}
+
+const AuditoriaSubmissionObject = z.object({
   lojaId: z.string().min(1, 'Selecione uma loja válida'),
   pesquisadorId: z.string().min(1, 'Selecione o pesquisador'),
   statusEntrada: z.enum([
@@ -131,25 +198,15 @@ export const AuditoriaSubmissionSchema = z.object({
   // Loja fechada / em reforma / outro: descrição da situação
   justificativaInoperante: z.string().optional().nullable(),
 
-  // §4 Geladeira
+  // §4 a §7: uma entrada por geladeira da loja
   existeGeladeira: z.boolean().optional().nullable(),
-  marcaVisualGeladeira: z.enum(MARCA_VISUAL_GELADEIRA).optional().nullable(),
-  posseGeladeira: z.enum(POSSE_GELADEIRA).optional().nullable(),
+  geladeiras: z.array(GeladeiraSchema).optional().default([]),
 
-  // §5 Monster
+  // §5 Monster na loja (dentro ou fora das geladeiras)
   monsterPresente: z.boolean().optional().nullable(),
-  monsterNaGeladeira: z.boolean().optional().nullable(),
 
-  // §6 Mapa de bebidas + marcas Coca-Cola
-  mapaBebidas: z.array(MapaBebidaItemSchema).optional().default([]),
+  // §6 Marcas Coca-Cola vistas na loja
   marcasCocaPresentes: z.array(z.string()).optional().default([]),
-
-  // §7 Organização e exposição
-  organizacaoGeladeira: z.enum(ORGANIZACAO_GELADEIRA).optional().nullable(),
-  abastecimentoGeladeira: z.enum(ABASTECIMENTO_GELADEIRA).optional().nullable(),
-  visibilidadeMarcas: z.enum(VISIBILIDADE_MARCAS).optional().nullable(),
-  concorrentesMisturados: z.boolean().optional().nullable(),
-  concorrentesDetalhes: z.string().optional().nullable(),
 
   // §9 Caixa e entorno
   espacoLivreCaixa: z.boolean().optional().nullable(),
@@ -165,81 +222,77 @@ export const AuditoriaSubmissionSchema = z.object({
 
   fotos: z.array(AuditoriaFotoInputSchema)
 }).superRefine((data, ctx) => {
-  const exigir = (condicao: boolean, path: string, message: string) => {
-    if (condicao) ctx.addIssue({ code: z.ZodIssueCode.custom, message, path: [path] });
+  const exigir = (condicao: boolean, path: (string | number)[], message: string) => {
+    if (condicao) ctx.addIssue({ code: z.ZodIssueCode.custom, message, path });
   };
 
   const isOperante = data.statusEntrada === STATUS_ENTRADA.ABERTA;
+  const geladeiras = isOperante && data.existeGeladeira === true ? data.geladeiras : [];
 
   if (!isOperante) {
     const just = data.justificativaInoperante?.trim() || '';
     exigir(
       just.length < JUSTIFICATIVA_MIN,
-      'justificativaInoperante',
+      ['justificativaInoperante'],
       `Descreva a situação da loja (mínimo ${JUSTIFICATIVA_MIN} caracteres)`
     );
   } else {
-    exigir(nulo(data.existeGeladeira), 'existeGeladeira', 'Informe se existe geladeira de bebidas');
+    exigir(nulo(data.existeGeladeira), ['existeGeladeira'], 'Informe se existe geladeira de bebidas');
 
     if (data.existeGeladeira) {
-      exigir(!data.marcaVisualGeladeira, 'marcaVisualGeladeira', 'Informe a identificação visual da geladeira');
-      exigir(!data.posseGeladeira, 'posseGeladeira', 'Informe a quem a geladeira aparenta pertencer');
-      exigir(!data.organizacaoGeladeira, 'organizacaoGeladeira', 'Avalie a organização da geladeira');
-      exigir(!data.abastecimentoGeladeira, 'abastecimentoGeladeira', 'Avalie o abastecimento da geladeira');
-      exigir(!data.visibilidadeMarcas, 'visibilidadeMarcas', 'Avalie a visibilidade das marcas');
-      exigir(nulo(data.concorrentesMisturados), 'concorrentesMisturados', 'Informe se há produtos concorrentes misturados');
-      exigir(
-        data.concorrentesMisturados === true && (data.concorrentesDetalhes?.trim().length || 0) < 3,
-        'concorrentesDetalhes',
-        'Registre quais marcas concorrentes estão misturadas e onde estão'
-      );
-
-      for (const categoria of CATEGORIAS_BEBIDA) {
-        const item = data.mapaBebidas.find((m) => m.categoria === categoria);
-        if (!item || nulo(item.tem)) {
-          exigir(true, 'mapaBebidas', `Mapa de bebidas: informe se tem ${categoria}`);
-        } else if (item.tem && nulo(item.concorrentes)) {
-          exigir(true, 'mapaBebidas', `Mapa de bebidas: informe se há concorrentes em ${categoria}`);
+      exigir(geladeiras.length === 0, ['geladeiras'], 'Registre ao menos uma geladeira');
+      exigir(geladeiras.length > MAX_GELADEIRAS, ['geladeiras'], `No máximo ${MAX_GELADEIRAS} geladeiras por loja`);
+      geladeiras.forEach((g, i) => {
+        for (const falta of pendenciasGeladeira(g)) {
+          exigir(true, ['geladeiras', i], `Geladeira ${i + 1}: ${falta}`);
         }
-      }
+      });
     }
 
-    exigir(nulo(data.monsterPresente), 'monsterPresente', 'Informe se existe Monster na loja');
+    exigir(nulo(data.monsterPresente), ['monsterPresente'], 'Informe se existe Monster na loja');
     exigir(
-      data.monsterPresente === true && data.existeGeladeira === true && nulo(data.monsterNaGeladeira),
-      'monsterNaGeladeira',
-      'Informe se existe Monster dentro de alguma geladeira'
+      data.monsterPresente === false && geladeiras.some((g) => g.monsterPresente === true),
+      ['monsterPresente'],
+      'Há Monster em uma geladeira: marque que existe Monster na loja'
     );
 
-    exigir(nulo(data.espacoLivreCaixa), 'espacoLivreCaixa', 'Informe se existe espaço livre próximo ao caixa');
+    exigir(nulo(data.espacoLivreCaixa), ['espacoLivreCaixa'], 'Informe se existe espaço livre próximo ao caixa');
     exigir(
       data.espacoLivreCaixa === true && nulo(data.boaVisibilidadeCaixa),
-      'boaVisibilidadeCaixa',
+      ['boaVisibilidadeCaixa'],
       'Informe se o espaço tem boa visibilidade para o consumidor'
     );
-    exigir(!data.espacoDisponivel, 'espacoDisponivel', 'Classifique o espaço disponível (Bom / Limitado / Insuficiente)');
-    exigir(nulo(data.outrosDisplaysImpulso), 'outrosDisplaysImpulso', 'Informe se existe exposição de balas, gomas ou doces');
+    exigir(!data.espacoDisponivel, ['espacoDisponivel'], 'Classifique o espaço disponível (Bom / Limitado / Insuficiente)');
+    exigir(nulo(data.outrosDisplaysImpulso), ['outrosDisplaysImpulso'], 'Informe se existe exposição de balas, gomas ou doces');
     exigir(
       data.outrosDisplaysImpulso === true && nulo(data.displaysImpulsoProximo),
-      'displaysImpulsoProximo',
+      ['displaysImpulsoProximo'],
       'Informe se a exposição de impulso está próxima ao caixa'
     );
-    exigir(!data.potencialDisplay, 'potencialDisplay', 'Classifique o potencial para o Display Coca-Cola Vai Até Você');
+    exigir(!data.potencialDisplay, ['potencialDisplay'], 'Classifique o potencial para o Display Coca-Cola Vai Até Você');
   }
 
-  const presentes = new Set(data.fotos.map((f) => f.tipo));
+  // Fotos antigas sem o número da geladeira contam como geladeira 1
+  const presentes = new Set(data.fotos.map((f) => chaveTipoFoto(f.tipo)));
   const obrigatorias = fotosObrigatorias({
     inoperante: !isOperante,
     existeGeladeira: data.existeGeladeira,
-    concorrentesMisturados: data.concorrentesMisturados,
+    geladeiras,
     espacoLivreCaixa: data.espacoLivreCaixa
   });
   for (const tipo of obrigatorias) {
     if (!presentes.has(tipo)) {
-      const label = TIPOS_FOTO.find((t) => t.id === tipo)?.label || tipo;
-      exigir(true, 'fotos', `Foto obrigatória ausente: ${label}`);
+      const label = metaTipoFoto(tipo)?.label || tipo;
+      const { geladeira } = lerTipoFoto(tipo);
+      exigir(
+        true,
+        ['fotos'],
+        geladeira ? `Geladeira ${geladeira}: foto obrigatória ausente – ${label}` : `Foto obrigatória ausente: ${label}`
+      );
     }
   }
 });
+
+export const AuditoriaSubmissionSchema = z.preprocess(converterFormatoAntigo, AuditoriaSubmissionObject);
 
 export type AuditoriaSubmissionInput = z.infer<typeof AuditoriaSubmissionSchema>;
